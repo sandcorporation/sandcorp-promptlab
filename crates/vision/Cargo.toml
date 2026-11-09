@@ -1,0 +1,15 @@
+[package]
+name = "promptlab-vision"
+description = "웹캠 프레임 로컬 분석(얼굴 없음·여러 명·시선 이탈). 분석기 트레잇 + YuNet(ONNX) 구현, 순수 Rust(tract)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# 응시 앱만 쓴다. ONNX 런타임은 tract(순수 Rust) — onnxruntime 네이티브 DLL을 빌드·설치 파일에 더하지 않는다.
+[dependencies]
+tract-onnx.workspace = true
+image.workspace = true
+sha2.workspace = true
+thiserror.workspace = true

@@ -1,0 +1,61 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+license = "UNLICENSED"
+publish = false
+
+[workspace.dependencies]
+schemars = "1.0.4"
+promptlab-shared = { path = "crates/shared" }
+promptlab-inference = { path = "crates/inference" }
+promptlab-store = { path = "crates/store" }
+promptlab-worker = { path = "crates/worker" }
+promptlab-observability = { path = "crates/observability" }
+axum = "0.8.9"
+tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "net", "signal"] }
+tower = { version = "0.5.3", features = ["util"] }
+http-body-util = "0.1.5"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+sha2 = "0.10"
+sha1 = "0.10.6"
+hmac = "0.12.1"
+# llama.cpp 바인딩. 정확한 버전으로 고정한다(llama.cpp 판이 바뀌면 출력이 바뀔 수 있다).
+llama-cpp-2 = { version = "=0.1.160", default-features = false }
+# llama-cpp-2는 sys를 `^`로 받으므로 llama.cpp 원본(sys) 판도 따로 못 박는다.
+llama-cpp-sys-2 = { version = "=0.1.160", default-features = false }
+thiserror = "2"
+# sandcorp-auth 액세스 토큰(EdDSA/Ed25519) 검증 — 규칙은 crates/server/src/auth/token.rs.
+ed25519-dalek = "2.2"
+base64 = "0.22.1"
+getrandom = "0.3.4"
+url = "2.5.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+dioxus = "0.7.10"
+# Postgres(제출 저장·채점 큐). 질의는 런타임 함수(`sqlx::query`)만 쓴다 — 컴파일 때 DB가 필요 없다.
+# `migrate!`는 crates/store/migrations 를 바이너리에 굽고, `#[sqlx::test]`가 시험마다 새 DB를 만든다.
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio", "postgres", "macros", "migrate", "uuid", "json"] }
+uuid = { version = "1.29.0", features = ["v4"] }
+# 응시 앱 → 서버 HTTP 클라이언트. TLS는 OS 것(Windows schannel, 리눅스 openssl).
+reqwest = { version = "0.12.28", features = ["json"] }
+# 웹캠 로컬 분석(#13). ONNX 추론은 순수 Rust(tract) — 네이티브 런타임 DLL 없이 Windows x64 빌드에 들어간다.
+promptlab-vision = { path = "crates/vision" }
+tract-onnx = "0.23.10"
+# 웹캠 프레임(JPEG) 풀기만 쓴다.
+image = { version = "0.25.10", default-features = false, features = ["jpeg"] }
+
+# 디버그 정보를 끈다(#46). 시험 바이너리 링크 최대 RSS가 줄어 macOS 빌드 노드의 `ld` OOM(signal 9)을 피한다.
+# `cargo test`는 dev 프로필을 물려받는다. 백트레이스의 줄 번호만 잃는다.
+[profile.dev]
+debug = 0
+
+# 모델 파일(1.1GB) sha256 검증이 디버그 빌드(`cargo test`)에서도 몇 초 안에 끝나게 한다(최적화 없이는 약 50초).
+[profile.dev.package.sha2]
+opt-level = 3

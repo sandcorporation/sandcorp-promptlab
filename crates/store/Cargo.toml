@@ -1,0 +1,14 @@
+[package]
+name = "promptlab-store"
+description = "서버 쪽 저장소: Postgres(제출·채점 큐)와 내장 문제 목록(숨은 입력 포함). 응시 앱은 이 크레이트에 기대지 않는다"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+promptlab-shared.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+uuid.workspace = true

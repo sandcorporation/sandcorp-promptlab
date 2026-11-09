@@ -1,0 +1,24 @@
+[package]
+name = "promptlab-inference"
+description = "llama.cpp(GGUF Q4) 추론 구현. 응시 앱만 쓴다(AI 도우미). 기능 vulkan = GPU(동적 백엔드), 없으면 CPU"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# llama.cpp는 여기에만 묶는다 — 대시보드(wasm32)는 promptlab-shared만 쓰므로 끌려가지 않는다.
+[dependencies]
+promptlab-shared.workspace = true
+llama-cpp-2.workspace = true
+llama-cpp-sys-2.workspace = true
+sha2.workspace = true
+
+# 다른 앱까지 센 GPU 전용 메모리 사용량(PDH, #116 — src/os_gpu.rs).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_System_Performance"] }
+
+[features]
+# GPU 가속(#98): llama.cpp Vulkan 백엔드를 동적 모듈(GGML_BACKEND_DL)로 굽는다 — 빌드에 Vulkan SDK(glslc)가 필요하다.
+# 실행 파일은 vulkan-1에 링크되지 않고, Vulkan 런타임이 없는 PC에서는 ggml-vulkan 모듈만 못 읽어 CPU로 돈다(src/lib.rs).
+vulkan = ["llama-cpp-2/vulkan", "llama-cpp-2/dynamic-backends"]

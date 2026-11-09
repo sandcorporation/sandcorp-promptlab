@@ -1,0 +1,69 @@
+{
+  "id": "count-vowels",
+  "title": "모음 세기",
+  "description": "영문 소문자로만 이루어진 문자열 `s`에서 모음(a, e, i, o, u)의 개수를 반환하세요.\n\n**공개 픽스처 문항** — 개발·CI용이며 운영 문제은행이 아닙니다.",
+  "signature": {
+    "name": "count_vowels",
+    "params": [
+      {
+        "name": "s",
+        "type": "string"
+      }
+    ],
+    "returns": "int"
+  },
+  "examples": [
+    {
+      "args": [
+        "banana"
+      ],
+      "expected": 3
+    },
+    {
+      "args": [
+        "rhythm"
+      ],
+      "expected": 0
+    },
+    {
+      "args": [
+        "aeiou"
+      ],
+      "expected": 5
+    }
+  ],
+  "hidden": [
+    {
+      "args": [
+        "encyclopediafixture"
+      ],
+      "expected": 8
+    },
+    {
+      "args": [
+        "onomatopoeiaexample"
+      ],
+      "expected": 11
+    },
+    {
+      "args": [
+        "strengthsrhythmsxyz"
+      ],
+      "expected": 1
+    },
+    {
+      "args": [
+        "queueingtheoryisfun"
+      ],
+      "expected": 9
+    },
+    {
+      "args": [
+        "abcdefghijklmnopqrstuvwxyz"
+      ],
+      "expected": 5
+    }
+  ],
+  "reference_language": "python",
+  "reference_solution": "def count_vowels(s: str) -> int:\n    return sum(1 for c in s if c in 'aeiou')\n"
+}

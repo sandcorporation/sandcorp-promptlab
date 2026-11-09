@@ -1,0 +1,11 @@
+# Windows 전용 스크립트: 줄끝은 어느 노드(autocrlf 설정이 제각각)에서 체크아웃해도 CRLF로 맞춘다.
+# UTF-8 BOM은 파일 내용으로 남긴다(working-tree-encoding 안 씀) — Windows PowerShell 5.1이 BOM 없는
+# UTF-8을 CP949로 읽어 한글 문자열이 깨지기 때문이다. scripts/ci/check.sh 가 BOM을 검사한다.
+*.ps1 text eol=crlf
+*.iss text eol=crlf
+*.onnx binary
+*.jpg binary
+
+# Monaco 편집기 자산(#97, scripts/fetch-monaco.sh가 고정 판으로 복사 — 손으로 고치지 않는다)
+crates/app/assets/monaco/** -diff linguist-vendored
+*.ttf binary

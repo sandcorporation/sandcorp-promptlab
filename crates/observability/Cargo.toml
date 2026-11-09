@@ -1,0 +1,19 @@
+[package]
+name = "promptlab-observability"
+description = "서버·워커가 같이 쓰는 오류 수집(GlitchTip, sentry SDK) 초기화와 개인정보·비밀 걸러내기"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# 기본 기능의 native-tls(openssl)를 빼고 rustls 전송만 쓴다 — 서버 이미지에는 OpenSSL이 없다.
+sentry = { version = "0.49.5", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
+sentry-tracing = "0.49.5"
+tracing.workspace = true
+tracing-subscriber.workspace = true
+regex.workspace = true
+
+[dev-dependencies]
+sentry = { version = "0.49.5", default-features = false, features = ["test"] }

@@ -1,0 +1,105 @@
+/* 응시 앱 Fluent(Windows 11) 토큰 — 색 값은 이 파일에만 둔다(원시 색 금지 시험 crates/dashboard/tests/no_raw_colors.rs 가
+ * 이 파일만 예외로 본다). 나머지 CSS·rsx 는 var(--…)만 쓴다. 바이너리에 굽는다(include_str!) — 외부 CSS·글꼴 요청 없음.
+ * 글꼴 파일은 넣지 않는다: Windows 11 은 Segoe UI Variable, 한글은 맑은 고딕, 그 밖(리눅스 등)은 시스템 글꼴.
+ * 라이트 값은 시안(promptlab-win11)의 값, 다크 값은 시안이 라이트뿐이라 Windows 11 기본 앱(설정·메모장)의 Fluent 다크
+ * 기본 팔레트를 따른다(Mica #202020, 내용 층 #272727, 카드 #2B2B2B, 강조 #60CDFF). */
+:root {
+  --font: "Segoe UI Variable Text", "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: Consolas, "Cascadia Mono", "Malgun Gothic", ui-monospace, monospace;
+
+  --bg-mica: #F3F3F3;
+  --bg-layer: #F9F9F9;
+  --bg-card: #FFFFFF;
+  --bg-hover: #F6F6F6;
+  --bg-subtle: #F0F0F0;
+  --bg-pressed: #EBEBEB;
+  --stroke-card: #E5E5E5;
+  --stroke-control: #E5E5E5;
+  --stroke-control-bottom: #CCCCCC;
+  --text: #1B1B1B;
+  --text-2: #616161;
+  --text-disabled: #A0A0A0;
+  --accent: #005FB8;
+  --accent-hover: #0F6CBD;
+  --accent-pressed: #003E92;
+  --on-accent: #FFFFFF;
+  --on-accent-disabled: #FFFFFF;
+  --accent-disabled: #C8C8C8;
+
+  --neutral-bg: #EBEBEB;
+  --neutral-fg: #3B3B3B;
+  --ok-bg: #DFF6DD;
+  --ok-line: #C7E8C4;
+  --ok-fg: #0E5C0E;
+  --ok-icon: #0F7B0F;
+  --warn-bg: #FFF4CE;
+  --warn-line: #F1DE9C;
+  --warn-fg: #7A4A00;
+  --warn-icon: #9D5D00;
+  --err-bg: #FDE7E9;
+  --err-line: #F5C2C7;
+  --err-fg: #A80000;
+  --err-icon: #C42B1C;
+  --info-bg: #F6F6F6;
+  --info-line: #E5E5E5;
+  /* 선택된 목록 항목·안내 상자(옅은 강조), 결과 다시보기의 내 말풍선 */
+  --accent-subtle-bg: #F0F6FC;
+  --accent-subtle-line: #C7DDF2;
+  --accent-soft: #E6F0FA;
+  --accent-soft-fg: #0B2D52;
+  /* ContentDialog 뒤 가림막·그림자, 펼친 문제 칸(flyout) 그림자 */
+  --scrim: rgba(0, 0, 0, 0.3);
+  --shadow-dialog: 0 32px 64px rgba(0, 0, 0, 0.19), 0 2px 21px rgba(0, 0, 0, 0.15);
+  --shadow-flyout: 0 8px 16px rgba(0, 0, 0, 0.14);
+
+  --radius: 4px;
+  --radius-lg: 8px;
+}
+
+@media screen and (prefers-color-scheme: dark) {
+  :root {
+    --bg-mica: #202020;
+    --bg-layer: #272727;
+    --bg-card: #2B2B2B;
+    --bg-hover: #323232;
+    --bg-subtle: #2D2D2D;
+    --bg-pressed: #272727;
+    --stroke-card: #1D1D1D;
+    --stroke-control: #373737;
+    --stroke-control-bottom: #303030;
+    --text: #FFFFFF;
+    --text-2: #C5C5C5;
+    --text-disabled: #787878;
+    --accent: #60CDFF;
+    --accent-hover: #4CC2F5;
+    --accent-pressed: #3BA6D9;
+    --on-accent: #000000;
+    --on-accent-disabled: #7A7A7A;
+    --accent-disabled: #424242;
+
+    --neutral-bg: #3A3A3A;
+    --neutral-fg: #E6E6E6;
+    --ok-bg: #393D1B;
+    --ok-line: #4A5026;
+    --ok-fg: #C7F0C2;
+    --ok-icon: #6CCB5F;
+    --warn-bg: #433519;
+    --warn-line: #5A4821;
+    --warn-fg: #FCE9A8;
+    --warn-icon: #FCE100;
+    --err-bg: #442726;
+    --err-line: #5C3433;
+    --err-fg: #FFB3BA;
+    --err-icon: #FF99A4;
+    --info-bg: #2D2D2D;
+    --info-line: #373737;
+    --accent-subtle-bg: #26323C;
+    --accent-subtle-line: #34506A;
+    --accent-soft: #1F3A52;
+    --accent-soft-fg: #D5ECFF;
+    --scrim: rgba(0, 0, 0, 0.5);
+    --shadow-dialog: 0 32px 64px rgba(0, 0, 0, 0.37), 0 2px 21px rgba(0, 0, 0, 0.32);
+    --shadow-flyout: 0 8px 16px rgba(0, 0, 0, 0.26);
+  }
+}

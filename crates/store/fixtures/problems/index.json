@@ -1,0 +1,10 @@
+{
+  "practice": [
+    "array-sum",
+    "reverse-words"
+  ],
+  "exam": [
+    "count-vowels",
+    "second-largest"
+  ]
+}

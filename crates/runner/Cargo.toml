@@ -1,0 +1,18 @@
+[package]
+name = "promptlab-runner"
+description = "러너 이미지 안의 실행기 — stdin 한 덩어리를 받아 컴파일·하네스 실행·케이스별 결과 줄(프로토콜은 lib)"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+license = "UNLICENSED"
+publish = false
+
+# 워크스페이스 상속(`.workspace = true`)을 쓰지 않는다 — 러너 이미지 빌드(docker/runners/*.Dockerfile)가
+# 이 폴더와 Cargo.lock만 넣어 따로 굽는다.
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.191"

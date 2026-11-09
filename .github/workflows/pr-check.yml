@@ -1,0 +1,81 @@
+# PR 검사(#138) — scripts/ci/check.sh 와 같은 단계(fmt·ps1 BOM·clippy -D warnings·빌드·대시보드 wasm32·시험)를
+# GitHub 호스팅 실행기에서 돈다. Jenkins PR 잡(Jenkinsfile.pr)과 같은 것이고, 공개 저장소로 옮긴 뒤 그 잡을 대신한다.
+#
+# 보안 규칙(공개 저장소 — 남의 PR 코드가 돈다):
+# - 트리거는 pull_request·push(main)만. pull_request_target 금지(포크 PR에 쓰기 토큰·비밀이 간다).
+# - GitHub 호스팅 실행기(ubuntu-latest)만. self-hosted 금지.
+# - 권한 contents: read 하나, secrets 0개 — 시험 DB 비밀번호는 service container 안에서만 쓰는 시험용 값이다.
+# - 액션은 공식(actions/*)과 캐시용 Swatinem/rust-cache만, 커밋 SHA로 고정한다(태그는 옮겨질 수 있다).
+# - 숨은 문항 데이터는 이 저장소에 없다 — 시험은 공개 픽스처(crates/store/fixtures)로 돈다.
+name: PR 검사
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: promptlab-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      # 시험 DB(#[sqlx::test]가 시험마다 새 DB를 만든다). 시험 전용 값 — 운영 비밀이 아니다.
+      DATABASE_URL: postgres://postgres:promptlab-ci@localhost:5432/postgres
+      CARGO_TERM_COLOR: never
+      CARGO_INCREMENTAL: 0
+      PROMPTLAB_CI_INSIDE: 1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # 실행기 디스크(약 14GB 여유)로는 llama.cpp·webkit 포함 워크스페이스 target이 빠듯하다 — 안 쓰는 SDK를 지운다.
+      - name: 디스크 비우기
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      # docker/ci.Dockerfile 과 같은 빌드 의존(앱 webview·llama.cpp 빌드).
+      - name: 빌드 의존 패키지
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            pkg-config libssl-dev \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev \
+            libxdo-dev librsvg2-dev \
+            cmake clang libclang-dev
+
+      # rust-toolchain.toml 의 판·구성 요소·wasm32 대상을 rustup 이 설치한다(서드파티 액션 없음).
+      - name: Rust 툴체인
+        run: |
+          rustup show active-toolchain || rustup toolchain install
+          rustc --version
+
+      # 의존성 빌드 결과(target)와 cargo 레지스트리를 캐시한다(#140). 저장은 main push 실행에서만 하고 PR은 main 캐시를
+      # 복원만 한다 — PR 범위(refs/pull/N/merge)에 묶인 캐시는 다른 PR이 못 읽고 10GB 한도만 먹는다. 키는 툴체인·Cargo.lock·
+      # 잡 이름으로 rust-cache가 만든다(워크스페이스 크레이트 산출물은 저장하지 않는다).
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: 검사(scripts/ci/check.sh 단계)
+        run: bash scripts/ci/check.sh

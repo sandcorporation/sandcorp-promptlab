@@ -1,0 +1,22 @@
+[package]
+name = "promptlab-shared"
+description = "API 타입·코딩 문제 형식·채점 리포트·과정 로그 형식·추론 트레잇(응시 앱)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+serde_json.workspace = true
+# 과정 로그(#9) 해시 체인·서명. 대시보드(wasm32)에서도 컴파일된다(난수가 필요 없는 서명·검증만 쓴다).
+sha2.workspace = true
+base64.workspace = true
+ed25519-dalek.workspace = true
+# MCP 출제 서버(#17)의 도구 입력·출력 JSON Schema를 API 타입에서 뽑는다. 서버만 켠다(앱·대시보드는 끌려가지 않는다).
+schemars = { workspace = true, optional = true }
+
+[features]
+schema = ["dep:schemars"]

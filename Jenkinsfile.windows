@@ -1,0 +1,92 @@
+// Windows 앱 빌드·설치 파일·(서명)·끝에서 끝 스모크 — 호스트(Windows 데스크톱)의 Jenkins 에이전트(제한 계정 jenkins-agent, WinSW 서비스·세션 0, 노드 라벨 windows-promptlab)에서 돈다.
+// 잡 이름 제안: sandcorp-promptlab-windows (Pipeline from SCM, Script Path = Jenkinsfile.windows, 브랜치 main).
+// 노드·계정·도구·자격·절차는 docs/windows-host.md. 노드가 아직 없으면 이 잡은 만들지 않는다(PR 검사 sandcorp-promptlab-pr 과 별개).
+// 화면 캡처는 하지 않는다(세션 0 — 대화형 데스크톱 없음). 창 확인은 MainWindowHandle 까지, 세션 0에서 창이 안 만들어지면 경고로 건너뛴다.
+pipeline {
+  agent { label 'windows-promptlab' }
+  options { timeout(time: 90, unit: 'MINUTES'); timestamps(); disableConcurrentBuilds(); buildDiscarder(logRotator(numToKeepStr: '15', artifactNumToKeepStr: '5')) }
+  // 하루 한 번(KST 04시대) — main 병합마다 돌리지 않는다(빌드·모델·러너 이미지 받기로 길다). cron 줄의 TZ= 로 Jenkins 시간대와 무관하게 KST.
+  triggers { cron('TZ=Asia/Seoul\nH 4 * * *') }
+  parameters {
+    booleanParam(name: 'SMOKE', defaultValue: true, description: '설치 파일로 끝에서 끝 스모크(Docker 확인 → 모범 답안 예제 테스트 → 운영 서버의 「스모크」 조직에 기계 토큰으로 제출·히든 채점)')
+    booleanParam(name: 'CAMERA', defaultValue: false, description: '가상 카메라 단계(앱에 웹캠이 생긴 뒤 — #13)')
+  }
+  environment {
+    CARGO_TERM_COLOR = 'never'
+    CARGO_HOME = 'C:\\promptlab-cache\\cargo'
+    CARGO_TARGET_DIR = 'C:\\promptlab-cache\\target'
+  }
+  stages {
+    stage('도구 확인') {
+      steps { powershell 'scripts\\windows\\check-tools.ps1' }
+    }
+    stage('빌드') {
+      steps { powershell 'scripts\\windows\\build.ps1' }
+    }
+    stage('설치 파일') {
+      steps {
+        script {
+          // 인증서 자격이 있으면 서명, 없으면 sign.ps1 이 「건너뜀」을 찍는다. 자격 ID: promptlab-codesign-pfx(파일)·promptlab-codesign-pfx-password(문자열).
+          def hasCert = false
+          try {
+            withCredentials([file(credentialsId: 'promptlab-codesign-pfx', variable: 'CODESIGN_PFX'),
+                             string(credentialsId: 'promptlab-codesign-pfx-password', variable: 'CODESIGN_PFX_PASSWORD')]) {
+              hasCert = true
+              powershell 'scripts\\windows\\build-installer.ps1'
+            }
+          } catch (e) {
+            if (hasCert) { throw e }
+            echo '코드 서명 자격(promptlab-codesign-pfx) 없음 — 서명 없이 설치 파일을 만든다.'
+            powershell 'scripts\\windows\\build-installer.ps1'
+          }
+        }
+      }
+      post { success { archiveArtifacts artifacts: 'dist/promptlab-app-setup-*.exe', fingerprint: true } }
+    }
+    stage('스모크') {
+      when { expression { params.SMOKE } }
+      steps {
+        // 스모크 기계 클라이언트(#28, 문자열 자격 promptlab-smoke-client-id·-secret). smoke.ps1 이 응시 직전에
+        // auth /token client_credentials 로 600초 토큰을 받는다. 자격 값은 Jenkins가 로그에서 가린다(토큰은 찍지 않는다).
+        withCredentials([string(credentialsId: 'promptlab-smoke-client-id', variable: 'PROMPTLAB_SMOKE_CLIENT_ID'),
+                         string(credentialsId: 'promptlab-smoke-client-secret', variable: 'PROMPTLAB_SMOKE_CLIENT_SECRET')]) {
+          powershell '''
+            & scripts\\windows\\fetch-model.ps1 -All | Out-Null
+            $setup = (Get-ChildItem dist\\promptlab-app-setup-*.exe | Select-Object -First 1).FullName
+            $cam = if ("$env:CAMERA" -eq 'true') { '-Camera' } else { '' }
+            if ($cam) { & e2e\\smoke.ps1 -Setup $setup -Camera } else { & e2e\\smoke.ps1 -Setup $setup }
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          '''
+        }
+      }
+    }
+  }
+  post {
+    always { echo "설치 파일: ${env.BUILD_URL}artifact/" }
+    // 정기 빌드가 아무도 안 보는 새 실패로 묻히지 않게 디스코드로 알린다(성공은 알리지 않는다). 자격은 공용 라이브러리 notifyDiscord 와 같은 discord-deploy-webhook.
+    failure { notifyDiscord() }
+    unstable { notifyDiscord() }
+  }
+}
+
+// 알림 실패는 빌드 결과를 바꾸지 않는다. 웹훅 값은 환경변수로만 쓰고 찍지 않는다(Jenkins 가 로그에서도 가린다).
+// payload 는 Groovy 에서 직접 이스케이프해 UTF-8 로 쓰고(JsonOutput 은 sandbox 승인 문제 가능), PowerShell 은 그 바이트를 그대로 보낸다 — 한글이 깨지지 않는다.
+void notifyDiscord() {
+  catchError(buildResult: null, stageResult: null, message: '디스코드 알림 실패 — 빌드 결과와 무관하다') {
+    withCredentials([string(credentialsId: 'discord-deploy-webhook', variable: 'DISCORD_WEBHOOK')]) {
+      String sha = (env.GIT_COMMIT ?: '-').take(12)
+      String took = currentBuild.durationString.replace(' and counting', '')
+      String text = "❌ [Promptlab Windows] 빌드 ${currentBuild.currentResult} — ${sha} · #${env.BUILD_NUMBER} · ${took} · ${env.BUILD_URL}".toString()
+      String escaped = text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '')
+      writeFile file: 'discord-payload.json', text: '{"content":"' + escaped + '"}', encoding: 'UTF-8'
+      powershell '''
+        $body = [System.IO.File]::ReadAllBytes((Join-Path $PWD 'discord-payload.json'))
+        try {
+          Invoke-RestMethod -Method Post -Uri $env:DISCORD_WEBHOOK -ContentType 'application/json; charset=utf-8' -Body $body | Out-Null
+        } catch {
+          Write-Host ('디스코드 알림 실패: HTTP ' + $_.Exception.Response.StatusCode.value__)
+        }
+      '''
+    }
+  }
+}

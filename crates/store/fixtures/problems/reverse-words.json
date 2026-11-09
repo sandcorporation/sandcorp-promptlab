@@ -1,0 +1,69 @@
+{
+  "id": "reverse-words",
+  "title": "단어 순서 뒤집기",
+  "description": "공백 하나로 구분된 단어들로 이루어진 문자열 `s`가 주어집니다. 단어의 순서를 거꾸로 하여 공백 하나로 이어 붙인 문자열을 반환하세요.\n\n**공개 픽스처 문항** — 개발·CI용이며 운영 문제은행이 아닙니다.",
+  "signature": {
+    "name": "reverse_words",
+    "params": [
+      {
+        "name": "s",
+        "type": "string"
+      }
+    ],
+    "returns": "string"
+  },
+  "examples": [
+    {
+      "args": [
+        "hello world"
+      ],
+      "expected": "world hello"
+    },
+    {
+      "args": [
+        "a"
+      ],
+      "expected": "a"
+    },
+    {
+      "args": [
+        "one two three"
+      ],
+      "expected": "three two one"
+    }
+  ],
+  "hidden": [
+    {
+      "args": [
+        "fixture alpha beta gamma"
+      ],
+      "expected": "gamma beta alpha fixture"
+    },
+    {
+      "args": [
+        "the quick brown fox jumps"
+      ],
+      "expected": "jumps fox brown quick the"
+    },
+    {
+      "args": [
+        "promptlab public fixture case"
+      ],
+      "expected": "case fixture public promptlab"
+    },
+    {
+      "args": [
+        "x y z w v u t"
+      ],
+      "expected": "t u v w z y x"
+    },
+    {
+      "args": [
+        "lorem ipsum dolor sit amet"
+      ],
+      "expected": "amet sit dolor ipsum lorem"
+    }
+  ],
+  "reference_language": "python",
+  "reference_solution": "def reverse_words(s: str) -> str:\n    return ' '.join(reversed(s.split(' ')))\n"
+}

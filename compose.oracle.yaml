@@ -1,0 +1,212 @@
+# 운영(oracle, arm64) — promptlab.sandcorp.co.kr. 이미지는 빌드 노드가 굽고 ghcr 로 올린 것을 pull 만 한다.
+# Jenkins 배포 잡(sandcorpDeploy, Jenkinsfile)이 이 파일로 교체한다. 설명은 docs/deploy.md.
+#
+#   NPM(host 네트워크) ──▶ 127.0.0.1:${PROMPTLAB_HOST_PORT}(server) ──▶ db
+#                                            worker ──▶ db      (같은 이미지, 큐를 하나씩 비운다)
+#                                            worker ──▶ judge ──▶ docker-proxy ──▶ /var/run/docker.sock
+#                                                    (judge 네트워크: internal, 포트 공개 없음)
+#
+# 히든 채점(#95, spec #93 3절): 워커가 히든 케이스 인자를 judge(POST /run)에 넘긴다. judge 는 docker CLI 로 러너 컨테이너를
+# 띄우는데 docker 소켓은 갖지 않고 DOCKER_HOST=tcp://docker-proxy:2375 만 안다. docker-proxy 가 소켓을 가진 유일한 서비스이고
+# 허용 목록(만들기·attach·시작·대기·kill·삭제·조회 + _ping·version)만 넘기며 만들기 본문을 판정기 상한 상수와 대조한다
+# (crates/docker-proxy). 러너 이미지는 docker-proxy 가 시작할 때 RUNNER_IMAGES 참조를 직접 받는다(클라이언트 pull 은 막힘).
+#
+# 러너 컨테이너는 compose 밖(데몬이 바로 만드는 형제 컨테이너)이라 아래 cpus·mem_limit 에 들지 않는다 — 상한은 판정기 상수가
+# 컨테이너마다 건다: CPU 1·메모리 512m(스왑 없음)·pids 64, 동시 2개 → 최대 2코어·1GB(oracle 4코어 중). 옛 채점 워커의
+# 모델 예산(2코어·3GB)을 이것이 대신한다.
+#
+# 운영 .env(oracle 배포 디렉터리, 값은 저장소에 없다): POSTGRES_PASSWORD, PROMPTLAB_AUTH_CLIENT_ID·SECRET(+ 선택 PUBLIC_URL·AUTH_URL,
+#   PROMPTLAB_SMOKE_CLIENT_IDS — 스모크 기계 클라이언트 client_id, 쉼표 구분, 없으면 기계 토큰 전부 거부,
+#   실시간 감독 #14: PROMPTLAB_TURN_SECRET·PROMPTLAB_TURN_EXTERNAL_IP — 없으면 turn 은 뜨지 않고 서버는 실시간 보기만 끈다).
+# docs/deploy.md 참고.
+name: promptlab-prod
+
+x-env: &env
+  DATABASE_URL: postgres://promptlab:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 가 .env 에 없다}@db:5432/promptlab
+  RUST_LOG: ${RUST_LOG:-info}
+  # 오류 수집(GlitchTip). DSN 은 운영 .env 의 SENTRY_DSN_BACKEND(없으면 꺼짐). release 는 배포 잡이 deploy.sh 에 넘기는
+  # SANDCORP_IMAGE_SHA(= 이미지 태그 sha, 되돌리기면 그 sha) — docker compose 가 프로세스 env 로 읽는다.
+  SENTRY_DSN: ${SENTRY_DSN_BACKEND:-}
+  SENTRY_RELEASE: ${SANDCORP_IMAGE_SHA:-}
+  # 문제은행(#138): 히든 테스트·모범 답안은 이미지에 굽지 않고 아래 x-problems 마운트에서 시작할 때 읽는다(깨졌으면 뜨지 않는다).
+  PROMPTLAB_PROBLEMS_DIR: /opt/promptlab/problems
+
+# 문제 디렉터리 ro 마운트(server·worker). 호스트 경로 기본값 ./problems-data 는 배포(Jenkinsfile extraCheckouts)가
+# 비공개 데이터 저장소 sandcorp-promptlab-problems 를 deploy/problems.ref 의 커밋으로 받아 두는 곳이다.
+x-problems: &problems
+  type: bind
+  source: ${PROMPTLAB_PROBLEMS_HOST_DIR:-./problems-data}
+  target: /opt/promptlab/problems
+  read_only: true
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: promptlab
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 가 .env 에 없다}
+      POSTGRES_DB: promptlab
+    # 메모리 상한 안에서 도는 값. 연결은 서버 풀과 워커 몇 개뿐이다.
+    command: postgres -c shared_buffers=64MB -c max_connections=40
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U promptlab -d promptlab"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+      start_interval: 2s
+    restart: unless-stopped
+    mem_limit: 384m
+
+  server:
+    image: ${PROMPTLAB_IMAGE:?PROMPTLAB_IMAGE 는 배포 잡이 넣는다}
+    environment:
+      <<: *env
+      # sandcorp-auth 계정(#7). 토큰 aud = ${PROMPTLAB_PUBLIC_URL}/api, 대시보드 콜백 = …/api/auth/callback.
+      PROMPTLAB_PUBLIC_URL: ${PROMPTLAB_PUBLIC_URL:-https://promptlab.sandcorp.co.kr}
+      PROMPTLAB_AUTH_URL: ${PROMPTLAB_AUTH_URL:-https://auth.sandcorp.co.kr}
+      PROMPTLAB_AUTH_OWNER_SUB: ${PROMPTLAB_AUTH_OWNER_SUB:-farrar142}
+      PROMPTLAB_AUTH_CLIENT_ID: ${PROMPTLAB_AUTH_CLIENT_ID:?PROMPTLAB_AUTH_CLIENT_ID 가 .env 에 없다}
+      PROMPTLAB_AUTH_CLIENT_SECRET: ${PROMPTLAB_AUTH_CLIENT_SECRET:?PROMPTLAB_AUTH_CLIENT_SECRET 이 .env 에 없다}
+      # 응시 초대 메일(#8, 선택). HOST가 비면 발송이 꺼진다(초대는 링크 복사로). 이미지가 대시보드도 서빙한다(PROMPTLAB_DASHBOARD_DIR).
+      # 스모크 기계 클라이언트(#28, 선택). 이 client_id 의 기계 토큰만 받고 「스모크」 조직 응시자로만 행동한다. 비면 전부 거부.
+      PROMPTLAB_SMOKE_CLIENT_IDS: ${PROMPTLAB_SMOKE_CLIENT_IDS:-}
+      PROMPTLAB_SMTP_HOST: ${PROMPTLAB_SMTP_HOST:-}
+      PROMPTLAB_SMTP_PORT: ${PROMPTLAB_SMTP_PORT:-}
+      PROMPTLAB_SMTP_USERNAME: ${PROMPTLAB_SMTP_USERNAME:-}
+      PROMPTLAB_SMTP_PASSWORD: ${PROMPTLAB_SMTP_PASSWORD:-}
+      PROMPTLAB_MAIL_FROM: ${PROMPTLAB_MAIL_FROM:-}
+      # 실시간 감독(#14, 선택). 공유 비밀이 없으면 실시간 보기만 꺼진다. URL 기본은 turn:<공개 호스트>:3478(udp·tcp).
+      PROMPTLAB_TURN_SECRET: ${PROMPTLAB_TURN_SECRET:-}
+      PROMPTLAB_TURN_URLS: ${PROMPTLAB_TURN_URLS:-}
+      PROMPTLAB_TURN_TTL_SECS: ${PROMPTLAB_TURN_TTL_SECS:-}
+      # AI 리포트(#15). 없으면 리포트 기능만 꺼진다.
+      PROMPTLAB_ANTHROPIC_API_KEY: ${PROMPTLAB_ANTHROPIC_API_KEY:-}
+      # 탈퇴 웹훅(#54): sandcorp-auth 클라이언트마다 하나, 쉼표 구분. 없으면 웹훅만 꺼진다(503).
+      PROMPTLAB_AUTH_WEBHOOK_SECRETS: ${PROMPTLAB_AUTH_WEBHOOK_SECRETS:-}
+    ports:
+      # NPM 이 host 네트워크라 호스트 루프백으로 붙는다. 밖으로는 열지 않는다.
+      - "127.0.0.1:${PROMPTLAB_HOST_PORT:-18096}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf \"GET /health HTTP/1.0\\r\\n\\r\\n\" >&3 && head -n1 <&3 | grep -q \" 200 \"'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+      start_interval: 2s
+    volumes:
+      - *problems
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 256m
+
+  worker:
+    # 서버와 같은 이미지(바이너리 둘). 채점은 judge 에 넘기므로 워커 자신은 큐·DB 만 다룬다.
+    image: ${PROMPTLAB_IMAGE:?PROMPTLAB_IMAGE 는 배포 잡이 넣는다}
+    command: ["promptlab-worker"]
+    environment:
+      <<: *env
+      PROMPTLAB_JUDGE_URL: http://judge:8090
+    volumes:
+      - *problems
+    networks: [default, judge]
+    depends_on:
+      db:
+        condition: service_healthy
+      judge:
+        condition: service_started
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 256m
+
+  judge:
+    # 판정기(POST /run, 8090). 언어 → 고정 러너 이미지, 상한 플래그는 상수뿐(crates/judge). docker CLI 는 프록시로만 닿는다.
+    # 자기 상한은 HTTP·docker CLI 프로세스 몫뿐이다(러너 컨테이너는 compose 밖 — 위 머리 주석).
+    image: ${PROMPTLAB_JUDGE_IMAGE:?PROMPTLAB_JUDGE_IMAGE 는 배포 잡이 넣는다}
+    environment:
+      RUST_LOG: ${RUST_LOG:-info}
+      DOCKER_HOST: tcp://docker-proxy:2375
+      PROMPTLAB_JUDGE_CONCURRENCY: "2"
+    networks: [judge]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    # PID 1 이 SIGTERM 을 받아 넘기도록(판정기는 Ctrl-C 만 직접 받는다).
+    init: true
+    depends_on:
+      docker-proxy:
+        condition: service_started
+    restart: unless-stopped
+    cpus: 0.25
+    mem_limit: 128m
+
+  docker-proxy:
+    # 본문 검사 docker 소켓 프록시(#95). 소켓은 이 서비스에만 마운트한다(읽기 전용 마운트로는 API 를 막을 수 없다 — 막는 일은
+    # 프록시 규칙이 한다). judge 네트워크(internal)에서만 받고 포트를 열지 않는다.
+    # root 로 시작해 소켓 gid 를 보조 그룹으로 두고 nobody 로 내린다 — 그래서 SETUID·SETGID 만 준다(내린 뒤엔 커널이 거둔다).
+    image: ${PROMPTLAB_PROXY_IMAGE:?PROMPTLAB_PROXY_IMAGE 는 배포 잡이 넣는다}
+    environment:
+      RUST_LOG: ${RUST_LOG:-info}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [judge]
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    cpus: 0.25
+    mem_limit: 64m
+
+  turn:
+    # 실시간 감독(#14) TURN relay. 서버가 같은 공유 비밀로 시간 제한 자격(TURN REST API)을 준다 — 장기 비밀번호 없음.
+    # relay 포트 범위를 docker NAT 없이 쓰려고 host 네트워크. 열어야 할 포트(OCI 보안 목록·호스트 방화벽, 대장 몫):
+    #   3478/udp, 3478/tcp, 49160-49199/udp(40개, PROMPTLAB_TURN_MIN_PORT·MAX_PORT 로 조정). TLS(5349)는 쓰지 않는다(443은 NPM, 인증서 관리를 늘리지 않는다).
+    # .env 에 PROMPTLAB_TURN_SECRET·PROMPTLAB_TURN_EXTERNAL_IP(공인 IP — 호스트는 사설 IP라 relay 주소로 알린다)가
+    # 없으면 안내 한 줄만 찍고 exit 0 으로 끝난다(재시작하지 않는다) — 값을 넣기 전에 배포해도 깨지지 않는다.
+    # 배포 잡이 keepServices 로 `up -d --no-deps turn` 을 부른다(고정 태그, 설정이 같으면 그대로).
+    image: coturn/coturn:4.18.0-alpine
+    network_mode: host
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        if [ -z "$$TURN_SECRET" ] || [ -z "$$TURN_EXTERNAL_IP" ]; then
+          echo "PROMPTLAB_TURN_SECRET·PROMPTLAB_TURN_EXTERNAL_IP 가 .env 에 없다 — TURN 을 띄우지 않는다(실시간 감독 꺼짐)"
+          exit 0
+        fi
+        # relay 는 기본 경로 인터페이스(호스트 사설 IP) 하나에만 — docker 브리지 주소로 relay 하지 않는다.
+        PRIV=$$(ip -4 route get 1.1.1.1 | sed -n 's/.* src \([0-9.]*\).*/\1/p')
+        exec turnserver --log-file=stdout --no-tls --fingerprint \
+          --listening-port=3478 --min-port=${PROMPTLAB_TURN_MIN_PORT:-49160} --max-port=${PROMPTLAB_TURN_MAX_PORT:-49199} \
+          --listening-ip="$$PRIV" --relay-ip="$$PRIV" \
+          --external-ip="$$TURN_EXTERNAL_IP/$$PRIV" --realm="$$TURN_REALM" \
+          --use-auth-secret --static-auth-secret="$$TURN_SECRET" \
+          --no-multicast-peers --stale-nonce=600 \
+          --user-quota=4 --total-quota=40 --max-bps=1000000 \
+          --denied-peer-ip=0.0.0.0-0.255.255.255 --denied-peer-ip=10.0.0.0-10.255.255.255 \
+          --denied-peer-ip=100.64.0.0-100.127.255.255 --denied-peer-ip=127.0.0.0-127.255.255.255 \
+          --denied-peer-ip=169.254.0.0-169.254.255.255 --denied-peer-ip=172.16.0.0-172.31.255.255 \
+          --denied-peer-ip=192.168.0.0-192.168.255.255 --denied-peer-ip=::1 \
+          --denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+    environment:
+      TURN_SECRET: ${PROMPTLAB_TURN_SECRET:-}
+      TURN_EXTERNAL_IP: ${PROMPTLAB_TURN_EXTERNAL_IP:-}
+      TURN_REALM: ${PROMPTLAB_TURN_REALM:-promptlab.sandcorp.co.kr}
+    restart: on-failure
+    cpus: 0.5
+    mem_limit: 128m
+
+networks:
+  default:
+  # judge ↔ docker-proxy ↔ worker. internal: 밖(인터넷·호스트)으로 나가는 길이 없다. 러너 이미지 pull 은 데몬이 하므로 상관없다.
+  judge:
+    internal: true
+
+volumes:
+  db:

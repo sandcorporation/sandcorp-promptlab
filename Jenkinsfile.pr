@@ -1,0 +1,10 @@
+// PR 검사 — 멀티브랜치 잡이 PR마다 부른다. 파이프라인은 공용 라이브러리 sandcorp 의 sandcorpPrCheck.
+// 빌드 노드(home, 못 잡으면 macos)에서 PR 머지 결과로 scripts/ci/check.sh(docker 안 fmt·clippy·빌드·시험).
+// 결과는 PR head 커밋 상태(continuous-integration/jenkins/pr-merge)로 올라오고, 작업자는 wait-ci.py 통과 뒤 병합한다.
+@Library('sandcorp') _
+
+sandcorpPrCheck(
+  name: 'Promptlab',
+  check: 'bash scripts/ci/check.sh',
+  buildSsh: false,                      // 비공개 git 의존성 없음
+)

@@ -1,0 +1,10 @@
+# dx serve 개발 서버: /api/* 를 로컬 promptlab 서버(compose.dev.yaml, 127.0.0.1:18080)로 넘긴다.
+# 서버는 같은 경로를 /api 접두로도 받는다. 대시보드 로그인은 기밀 클라이언트라 https 운영 주소에서만 끝까지 돈다.
+[application]
+name = "promptlab-dashboard"
+
+[web.app]
+title = "promptlab 대시보드"
+
+[[web.proxy]]
+backend = "http://127.0.0.1:18080/api/"

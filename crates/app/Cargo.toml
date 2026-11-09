@@ -1,0 +1,46 @@
+[package]
+name = "promptlab-app"
+description = "Dioxus 데스크톱 응시 앱. 응시 세션 상태 기계·서버 클라이언트·로컬 모델은 UI와 떨어진 lib에 있다"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+default-run = "promptlab-app"
+
+# 숨은 입력이 든 문제 목록(promptlab-store)·서버·워커에는 기대지 않는다 — tests/no_hidden_inputs.rs가 건다.
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "promptlab-app"
+path = "src/main.rs"
+
+# 화면 없이 같은 응시 흐름(상태 기계·HTTP 클라이언트·로컬 모델)을 도는 진입점. 끝에서 끝 확인용.
+[[bin]]
+name = "promptlab-app-cli"
+path = "src/bin/promptlab-app-cli.rs"
+
+[features]
+# GPU 가속(#98): Windows 빌드가 Vulkan SDK가 있을 때 켠다(scripts/windows/build.ps1). 없으면 CPU만.
+vulkan = ["promptlab-inference/vulkan"]
+
+[dependencies]
+promptlab-shared.workspace = true
+promptlab-inference.workspace = true
+promptlab-vision.workspace = true
+# 로컬 실행(#97): 판정기의 같은 상한 플래그·러너 이미지·하네스를 HTTP 없이 쓴다.
+promptlab-judge = { path = "../judge", default-features = false }
+serde.workspace = true
+thiserror.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+tokio = { workspace = true, features = ["sync", "time", "net", "io-util", "rt", "process", "macros"] }
+sha2.workspace = true
+base64.workspace = true
+getrandom.workspace = true
+serde_json.workspace = true
+dioxus = { workspace = true, features = ["desktop"] }
+
+[dev-dependencies]
+# 가짜 auth·서버(로그인 흐름 시험).
+axum.workspace = true

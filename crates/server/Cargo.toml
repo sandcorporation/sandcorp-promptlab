@@ -1,0 +1,44 @@
+[package]
+name = "promptlab-server"
+description = "axum 백엔드: 문제 조회·제출 저장·채점 큐 생산자·결과 조회 API(이후 MCP·WebRTC 시그널링)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+promptlab-shared = { workspace = true, features = ["schema"] }
+schemars.workspace = true
+promptlab-store.workspace = true
+promptlab-observability.workspace = true
+sentry-tower = { version = "0.49.5", features = ["http"] }
+axum.workspace = true
+sqlx.workspace = true
+uuid.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+sha2.workspace = true
+sha1.workspace = true
+hmac.workspace = true
+ed25519-dalek.workspace = true
+base64.workspace = true
+getrandom.workspace = true
+url.workspace = true
+# JWKS·코드 교환. 서버 이미지에는 OpenSSL이 없으므로 rustls만 쓴다(워크스페이스 reqwest는 앱용 OS TLS).
+reqwest = { version = "0.12.28", default-features = false, features = ["json", "rustls-tls"] }
+# 대시보드(wasm) 정적 서빙.
+tower.workspace = true
+tower-http = { version = "0.6.11", features = ["fs", "set-header"] }
+# 응시 초대 메일(SMTP, rustls — 이미지에 OpenSSL 없음). 설정은 src/mail.rs.
+lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls", "ring", "webpki-roots"] }
+
+[dev-dependencies]
+promptlab-worker.workspace = true
+ed25519-dalek.workspace = true
+tower.workspace = true
+http-body-util.workspace = true

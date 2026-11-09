@@ -1,0 +1,8 @@
+/target
+/dist
+.env
+*.gguf
+/models
+# 배포가 받는 비공개 문제은행 체크아웃(#138, Jenkinsfile extraCheckouts)
+/problems-data
+.DS_Store

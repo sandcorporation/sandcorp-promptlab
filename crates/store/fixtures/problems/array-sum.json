@@ -1,0 +1,114 @@
+{
+  "id": "array-sum",
+  "title": "배열의 합",
+  "description": "정수 배열 `nums`의 모든 원소의 합을 반환하세요. 빈 배열의 합은 0입니다.\n\n**공개 픽스처 문항** — 개발·CI용이며 운영 문제은행이 아닙니다.",
+  "signature": {
+    "name": "array_sum",
+    "params": [
+      {
+        "name": "nums",
+        "type": "int[]"
+      }
+    ],
+    "returns": "int"
+  },
+  "examples": [
+    {
+      "args": [
+        [
+          1,
+          2,
+          3
+        ]
+      ],
+      "expected": 6
+    },
+    {
+      "args": [
+        []
+      ],
+      "expected": 0
+    },
+    {
+      "args": [
+        [
+          -5,
+          5
+        ]
+      ],
+      "expected": 0
+    }
+  ],
+  "hidden": [
+    {
+      "args": [
+        [
+          401,
+          402,
+          403,
+          404,
+          405
+        ]
+      ],
+      "expected": 2015
+    },
+    {
+      "args": [
+        [
+          -7001,
+          7002,
+          -7003,
+          7004
+        ]
+      ],
+      "expected": 2
+    },
+    {
+      "args": [
+        [
+          999999,
+          888888,
+          777777
+        ]
+      ],
+      "expected": 2666664
+    },
+    {
+      "args": [
+        [
+          11,
+          13,
+          17,
+          19,
+          23,
+          29,
+          31
+        ]
+      ],
+      "expected": 143
+    },
+    {
+      "args": [
+        [
+          -123456,
+          -654321,
+          42
+        ]
+      ],
+      "expected": -777735
+    },
+    {
+      "args": [
+        [
+          3141,
+          5926,
+          5358,
+          9793
+        ]
+      ],
+      "expected": 24218
+    }
+  ],
+  "reference_language": "python",
+  "reference_solution": "def array_sum(nums: list[int]) -> int:\n    return sum(nums)\n"
+}

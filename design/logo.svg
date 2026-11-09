@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 156 32" role="img" aria-label="Sandcorp">
+  <rect width="32" height="32" rx="2" fill="#1b1d24"/>
+  <path d="M0 21c5-8 10-9 15-5s10 3 17-4v20H0z" fill="#8a6214"/>
+  <path d="M0 26c6-6 11-6 16-2s10 2 16-3v11H0z" fill="#d9ad4c"/>
+  <text x="42" y="23.5" font-family="Pretendard, 'Pretendard Variable', system-ui, sans-serif" font-size="21" font-weight="700" letter-spacing="-0.6" fill="#1b1d24">Sandcorp</text>
+</svg>

@@ -1,0 +1,107 @@
+# 개발 스택: Postgres + 서버 + 채점 워커 + 판정기(judge) + 본문 검사 docker 소켓 프록시. 운영 배포(oracle)는
+# compose.oracle.yaml·docs/deploy.md — 개발도 같은 길(워커 → judge → docker-proxy → 호스트 docker 소켓)을 거친다.
+#
+#   bash scripts/build-runners.sh --local                        # 러너 이미지 4개를 로컬에 굽는다(프록시는 있으면 받지 않는다)
+#   docker compose -f compose.dev.yaml up -d --build
+#   curl localhost:18080/health
+#   PROMPTLAB_SERVER_URL=http://127.0.0.1:18080 cargo run -p promptlab-app      # 브라우저로 sandcorp-auth(카카오) 로그인
+#   docker compose -f compose.dev.yaml down -v                   # 내리고 DB 볼륨까지 지운다
+#
+# 포트는 환경변수로 바꾼다(아래 ${…:-기본값}). 인증은 운영 sandcorp-auth 토큰(aud=운영 리소스)을 그대로 받는다 —
+# 대시보드 로그인(기밀 클라이언트, https 콜백)은 로컬에서 끝까지 돌지 않는다(PROMPTLAB_AUTH_CLIENT_ID·SECRET 없으면 꺼짐).
+# 러너 컨테이너(판정 한 번에 하나, 최대 2개)는 compose 밖 형제 컨테이너로 호스트 docker 에 뜬다(CPU 1·512m 상수).
+name: promptlab-dev
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: promptlab
+      # 로컬 개발 전용 값(127.0.0.1에만 열린다) — 운영 DB 비밀번호는 운영 .env 에만 있다.
+      POSTGRES_PASSWORD: promptlab-dev
+      POSTGRES_DB: promptlab
+    ports:
+      - "127.0.0.1:${PROMPTLAB_DEV_DB_PORT:-15433}:5432"
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "promptlab", "-d", "promptlab"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  server:
+    build:
+      context: .
+      dockerfile: docker/server.Dockerfile
+    image: promptlab-dev:latest
+    environment:
+      DATABASE_URL: postgres://promptlab:promptlab-dev@db:5432/promptlab
+      RUST_LOG: info
+    ports:
+      - "127.0.0.1:${PROMPTLAB_DEV_PORT:-18080}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    # server 가 구운 같은 이미지(바이너리 둘)를 쓴다. 채점은 judge 에 넘긴다.
+    image: promptlab-dev:latest
+    pull_policy: never
+    command: ["promptlab-worker"]
+    environment:
+      DATABASE_URL: postgres://promptlab:promptlab-dev@db:5432/promptlab
+      RUST_LOG: info
+      PROMPTLAB_JUDGE_URL: http://judge:8090
+    networks: [default, judge]
+    depends_on:
+      db:
+        condition: service_healthy
+      server:
+        condition: service_started
+      judge:
+        condition: service_started
+
+  judge:
+    build:
+      context: .
+      dockerfile: docker/judge.Dockerfile
+    image: promptlab-dev-judge:latest
+    environment:
+      RUST_LOG: info
+      DOCKER_HOST: tcp://docker-proxy:2375
+      PROMPTLAB_JUDGE_CONCURRENCY: "2"
+    networks: [judge]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    init: true
+    depends_on:
+      docker-proxy:
+        condition: service_started
+
+  docker-proxy:
+    # 소켓은 이 서비스에만(운영과 같다). 권한 내리기는 docker/docker-proxy.Dockerfile 머리 주석.
+    build:
+      context: .
+      dockerfile: docker/docker-proxy.Dockerfile
+    image: promptlab-dev-docker-proxy:latest
+    environment:
+      RUST_LOG: info
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [judge]
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]
+    security_opt: [no-new-privileges:true]
+
+networks:
+  default:
+  judge:
+    internal: true
+
+volumes:
+  db:

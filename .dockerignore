@@ -1,0 +1,9 @@
+target
+.git
+dist
+models
+*.gguf
+.env
+# 문제은행 문항(히든 테스트·모범 답안, #138)은 이미지에 굽지 않는다 — 운영은 compose ro 마운트로 받는다.
+crates/store/problems
+problems-data

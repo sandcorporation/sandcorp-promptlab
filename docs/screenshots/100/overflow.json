@@ -1,0 +1,188 @@
+{
+ "light": {
+  "exam-results": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [
+    "a[#/orgs/10000000-0000-4000-8000-000000000001/exams/20000000-0000-4000-8000-000000000001/candidates \"2026 하반기 백엔드 개발자 코딩테스트\"] 244>187"
+   ],
+   "inner_scroll_count": 1,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "candidate-score": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [
+    "a[#/orgs/10000000-0000-4000-8000-000000000001/exams/20000000-0000-4000-8000-000000000001/results \"2026 하반기 백엔드 개발자 코딩테스트\"] 244>205"
+   ],
+   "inner_scroll_count": 1,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "candidate-evidence-click": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [
+    "a[#/orgs/10000000-0000-4000-8000-000000000001/exams/20000000-0000-4000-8000-000000000001/results \"2026 하반기 백엔드 개발자 코딩테스트\"] 244>205"
+   ],
+   "inner_scroll_count": 1,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "candidate-replay": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [
+    "a[#/orgs/10000000-0000-4000-8000-000000000001/exams/20000000-0000-4000-8000-000000000001/results \"2026 하반기 백엔드 개발자 코딩테스트\"] 244>205"
+   ],
+   "inner_scroll_count": 1,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "candidate-signals": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [
+    "a[#/orgs/10000000-0000-4000-8000-000000000001/exams/20000000-0000-4000-8000-000000000001/results \"2026 하반기 백엔드 개발자 코딩테스트\"] 244>205"
+   ],
+   "inner_scroll_count": 1,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "candidate-report": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [
+    "a[#/orgs/10000000-0000-4000-8000-000000000001/exams/20000000-0000-4000-8000-000000000001/results \"2026 하반기 백엔드 개발자 코딩테스트\"] 244>205"
+   ],
+   "inner_scroll_count": 1,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "candidate-erase-confirm": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [
+    "a[#/orgs/10000000-0000-4000-8000-000000000001/exams/20000000-0000-4000-8000-000000000001/results \"2026 하반기 백엔드 개발자 코딩테스트\"] 244>205"
+   ],
+   "inner_scroll_count": 1,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "members-terms": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [],
+   "inner_scroll_count": 0,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "create-org-unchecked": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [],
+   "inner_scroll_count": 0,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "create-org": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [],
+   "inner_scroll_count": 0,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "invite-accept": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [],
+   "inner_scroll_count": 0,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  }
+ },
+ "dark": {
+  "exam-results": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [
+    "a[#/orgs/10000000-0000-4000-8000-000000000001/exams/20000000-0000-4000-8000-000000000001/candidates \"2026 하반기 백엔드 개발자 코딩테스트\"] 244>187"
+   ],
+   "inner_scroll_count": 1,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "candidate-score": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [
+    "a[#/orgs/10000000-0000-4000-8000-000000000001/exams/20000000-0000-4000-8000-000000000001/results \"2026 하반기 백엔드 개발자 코딩테스트\"] 244>205"
+   ],
+   "inner_scroll_count": 1,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "candidate-evidence-click": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [
+    "a[#/orgs/10000000-0000-4000-8000-000000000001/exams/20000000-0000-4000-8000-000000000001/results \"2026 하반기 백엔드 개발자 코딩테스트\"] 244>205"
+   ],
+   "inner_scroll_count": 1,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "candidate-replay": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [
+    "a[#/orgs/10000000-0000-4000-8000-000000000001/exams/20000000-0000-4000-8000-000000000001/results \"2026 하반기 백엔드 개발자 코딩테스트\"] 244>205"
+   ],
+   "inner_scroll_count": 1,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "candidate-signals": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [
+    "a[#/orgs/10000000-0000-4000-8000-000000000001/exams/20000000-0000-4000-8000-000000000001/results \"2026 하반기 백엔드 개발자 코딩테스트\"] 244>205"
+   ],
+   "inner_scroll_count": 1,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "candidate-report": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [
+    "a[#/orgs/10000000-0000-4000-8000-000000000001/exams/20000000-0000-4000-8000-000000000001/results \"2026 하반기 백엔드 개발자 코딩테스트\"] 244>205"
+   ],
+   "inner_scroll_count": 1,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "candidate-erase-confirm": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [
+    "a[#/orgs/10000000-0000-4000-8000-000000000001/exams/20000000-0000-4000-8000-000000000001/results \"2026 하반기 백엔드 개발자 코딩테스트\"] 244>205"
+   ],
+   "inner_scroll_count": 1,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "members-terms": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [],
+   "inner_scroll_count": 0,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "create-org-unchecked": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [],
+   "inner_scroll_count": 0,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "create-org": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [],
+   "inner_scroll_count": 0,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  },
+  "invite-accept": {
+   "doc_overflow_px": 0,
+   "inner_scroll": [],
+   "inner_scroll_count": 0,
+   "beyond_viewport": [],
+   "beyond_count": 0
+  }
+ }
+}

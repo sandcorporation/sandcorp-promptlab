@@ -1,0 +1,262 @@
+{
+ "light": {
+  "exam-results": {
+   "doc_overflow_px": 0,
+   "beyond_viewport": [
+    "a.sc-sidenav-item right=394",
+    "a.sc-sidenav-item right=442",
+    "svg right=428",
+    "path right=425",
+    "span.sc-sidenav-label right=421",
+    "a right=462",
+    "table.sc-table right=750",
+    "thead right=750"
+   ],
+   "beyond_count": 36,
+   "inner_scroll": [
+    "aside.sc-sidenav 450>390",
+    "nav.sc-tabs 446>358",
+    "div.sc-table-scroll 733>356"
+   ],
+   "inner_scroll_count": 3
+  },
+  "candidate-conversations": {
+   "doc_overflow_px": 0,
+   "beyond_viewport": [
+    "a.sc-sidenav-item right=394",
+    "a.sc-sidenav-item right=442",
+    "svg right=428",
+    "path right=425",
+    "span.sc-sidenav-label right=421",
+    "a right=406",
+    "a right=493"
+   ],
+   "beyond_count": 7,
+   "inner_scroll": [
+    "aside.sc-sidenav 450>390",
+    "nav.sc-tabs 477>358"
+   ],
+   "inner_scroll_count": 2
+  },
+  "candidate-evidence-click": {
+   "doc_overflow_px": 0,
+   "beyond_viewport": [
+    "a.sc-sidenav-item right=394",
+    "a.sc-sidenav-item right=442",
+    "svg right=428",
+    "path right=425",
+    "span.sc-sidenav-label right=421",
+    "a right=406",
+    "a right=493"
+   ],
+   "beyond_count": 7,
+   "inner_scroll": [
+    "aside.sc-sidenav 450>390",
+    "nav.sc-tabs 477>358"
+   ],
+   "inner_scroll_count": 2
+  },
+  "candidate-replay": {
+   "doc_overflow_px": 0,
+   "beyond_viewport": [
+    "a.sc-sidenav-item right=394",
+    "a.sc-sidenav-item right=442",
+    "svg right=428",
+    "path right=425",
+    "span.sc-sidenav-label right=421",
+    "a right=406",
+    "a right=493"
+   ],
+   "beyond_count": 7,
+   "inner_scroll": [
+    "aside.sc-sidenav 450>390",
+    "nav.sc-tabs 477>358"
+   ],
+   "inner_scroll_count": 2
+  },
+  "candidate-signals": {
+   "doc_overflow_px": 0,
+   "beyond_viewport": [
+    "a.sc-sidenav-item right=394",
+    "a.sc-sidenav-item right=442",
+    "svg right=428",
+    "path right=425",
+    "span.sc-sidenav-label right=421",
+    "a right=406",
+    "a right=493"
+   ],
+   "beyond_count": 7,
+   "inner_scroll": [
+    "aside.sc-sidenav 450>390",
+    "nav.sc-tabs 477>358"
+   ],
+   "inner_scroll_count": 2
+  },
+  "candidate-report": {
+   "doc_overflow_px": 0,
+   "beyond_viewport": [
+    "a.sc-sidenav-item right=394",
+    "a.sc-sidenav-item right=442",
+    "svg right=428",
+    "path right=425",
+    "span.sc-sidenav-label right=421",
+    "a right=406",
+    "a right=494"
+   ],
+   "beyond_count": 7,
+   "inner_scroll": [
+    "aside.sc-sidenav 450>390",
+    "nav.sc-tabs 478>358"
+   ],
+   "inner_scroll_count": 2
+  },
+  "candidate-erase-confirm": {
+   "doc_overflow_px": 0,
+   "beyond_viewport": [
+    "a.sc-sidenav-item right=394",
+    "a.sc-sidenav-item right=442",
+    "svg right=428",
+    "path right=425",
+    "span.sc-sidenav-label right=421",
+    "a right=406",
+    "a right=493"
+   ],
+   "beyond_count": 7,
+   "inner_scroll": [
+    "aside.sc-sidenav 450>390",
+    "nav.sc-tabs 477>358"
+   ],
+   "inner_scroll_count": 2
+  }
+ },
+ "dark": {
+  "exam-results": {
+   "doc_overflow_px": 0,
+   "beyond_viewport": [
+    "a.sc-sidenav-item right=394",
+    "a.sc-sidenav-item right=442",
+    "svg right=428",
+    "path right=425",
+    "span.sc-sidenav-label right=421",
+    "a right=462",
+    "table.sc-table right=750",
+    "thead right=750"
+   ],
+   "beyond_count": 36,
+   "inner_scroll": [
+    "aside.sc-sidenav 450>390",
+    "nav.sc-tabs 446>358",
+    "div.sc-table-scroll 733>356"
+   ],
+   "inner_scroll_count": 3
+  },
+  "candidate-conversations": {
+   "doc_overflow_px": 0,
+   "beyond_viewport": [
+    "a.sc-sidenav-item right=394",
+    "a.sc-sidenav-item right=442",
+    "svg right=428",
+    "path right=425",
+    "span.sc-sidenav-label right=421",
+    "a right=406",
+    "a right=493"
+   ],
+   "beyond_count": 7,
+   "inner_scroll": [
+    "aside.sc-sidenav 450>390",
+    "nav.sc-tabs 477>358"
+   ],
+   "inner_scroll_count": 2
+  },
+  "candidate-evidence-click": {
+   "doc_overflow_px": 0,
+   "beyond_viewport": [
+    "a.sc-sidenav-item right=394",
+    "a.sc-sidenav-item right=442",
+    "svg right=428",
+    "path right=425",
+    "span.sc-sidenav-label right=421",
+    "a right=406",
+    "a right=493"
+   ],
+   "beyond_count": 7,
+   "inner_scroll": [
+    "aside.sc-sidenav 450>390",
+    "nav.sc-tabs 477>358"
+   ],
+   "inner_scroll_count": 2
+  },
+  "candidate-replay": {
+   "doc_overflow_px": 0,
+   "beyond_viewport": [
+    "a.sc-sidenav-item right=394",
+    "a.sc-sidenav-item right=442",
+    "svg right=428",
+    "path right=425",
+    "span.sc-sidenav-label right=421",
+    "a right=406",
+    "a right=493"
+   ],
+   "beyond_count": 7,
+   "inner_scroll": [
+    "aside.sc-sidenav 450>390",
+    "nav.sc-tabs 477>358"
+   ],
+   "inner_scroll_count": 2
+  },
+  "candidate-signals": {
+   "doc_overflow_px": 0,
+   "beyond_viewport": [
+    "a.sc-sidenav-item right=394",
+    "a.sc-sidenav-item right=442",
+    "svg right=428",
+    "path right=425",
+    "span.sc-sidenav-label right=421",
+    "a right=406",
+    "a right=493"
+   ],
+   "beyond_count": 7,
+   "inner_scroll": [
+    "aside.sc-sidenav 450>390",
+    "nav.sc-tabs 477>358"
+   ],
+   "inner_scroll_count": 2
+  },
+  "candidate-report": {
+   "doc_overflow_px": 0,
+   "beyond_viewport": [
+    "a.sc-sidenav-item right=394",
+    "a.sc-sidenav-item right=442",
+    "svg right=428",
+    "path right=425",
+    "span.sc-sidenav-label right=421",
+    "a right=406",
+    "a right=494"
+   ],
+   "beyond_count": 7,
+   "inner_scroll": [
+    "aside.sc-sidenav 450>390",
+    "nav.sc-tabs 478>358"
+   ],
+   "inner_scroll_count": 2
+  },
+  "candidate-erase-confirm": {
+   "doc_overflow_px": 0,
+   "beyond_viewport": [
+    "a.sc-sidenav-item right=394",
+    "a.sc-sidenav-item right=442",
+    "svg right=428",
+    "path right=425",
+    "span.sc-sidenav-label right=421",
+    "a right=406",
+    "a right=493"
+   ],
+   "beyond_count": 7,
+   "inner_scroll": [
+    "aside.sc-sidenav 450>390",
+    "nav.sc-tabs 477>358"
+   ],
+   "inner_scroll_count": 2
+  }
+ }
+}

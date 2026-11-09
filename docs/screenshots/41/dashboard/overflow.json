@@ -1,0 +1,410 @@
+[
+ {
+  "file": "login-desktop-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "login-desktop-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "login-mobile-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "login-mobile-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "exam-invite-desktop-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "exam-invite-desktop-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "exam-invite-mobile-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "exam-invite-mobile-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "home-org-desktop-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "home-org-desktop-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "home-org-mobile-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "home-org-mobile-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "exam-create-desktop-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "exam-create-desktop-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "exam-create-mobile-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "exam-create-mobile-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "exam-detail-results-desktop-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "exam-detail-results-desktop-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "exam-detail-results-mobile-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "exam-detail-results-mobile-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "exam-internal-rounds-desktop-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "exam-internal-rounds-desktop-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "exam-internal-rounds-mobile-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "exam-internal-rounds-mobile-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "replay-desktop-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "replay-desktop-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "replay-mobile-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "replay-mobile-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "signals-desktop-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "signals-desktop-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "signals-mobile-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "signals-mobile-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "ai-report-desktop-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "ai-report-desktop-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "ai-report-mobile-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "ai-report-mobile-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "webcam-desktop-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "webcam-desktop-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "webcam-mobile-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "webcam-mobile-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "live-desktop-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "live-desktop-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "live-mobile-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "live-mobile-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "erase-confirm-desktop-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "erase-confirm-desktop-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "erase-confirm-mobile-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "erase-confirm-mobile-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "problem-editor-desktop-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "problem-editor-desktop-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "problem-editor-mobile-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "problem-editor-mobile-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "operator-orgs-desktop-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "operator-orgs-desktop-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "operator-orgs-mobile-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "operator-orgs-mobile-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "operator-bank-desktop-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "operator-bank-desktop-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "operator-bank-mobile-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "operator-bank-mobile-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "operator-metrics-desktop-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "operator-metrics-desktop-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "operator-metrics-mobile-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "operator-metrics-mobile-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "operator-allowlist-desktop-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "operator-allowlist-desktop-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "operator-allowlist-mobile-light.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ },
+ {
+  "file": "operator-allowlist-mobile-dark.jpg",
+  "doc": 0,
+  "boxes": [],
+  "sticking": 0
+ }
+]

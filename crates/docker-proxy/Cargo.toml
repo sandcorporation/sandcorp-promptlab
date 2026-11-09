@@ -1,0 +1,25 @@
+[package]
+name = "promptlab-docker-proxy"
+description = "판정기용 docker 소켓 프록시(#95): 허용 목록 경로만, 컨테이너 만들기 본문을 판정기 상한 상수와 대조"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# store·server·worker에 기대지 않는다. 규칙의 근거는 판정기 상수(`promptlab_judge::limits`·`docker_run_args`)와
+# 러너 이미지 판(`promptlab_shared::coding::RUNNER_IMAGES`) 한 곳이다.
+
+[dependencies]
+promptlab-shared.workspace = true
+promptlab-judge = { path = "../judge", default-features = false }
+hyper = { version = "1.12.0", features = ["server", "client", "http1"] }
+hyper-util = { version = "0.1.21", features = ["tokio"] }
+http-body-util.workspace = true
+bytes = "1.12.1"
+tokio = { workspace = true, features = ["io-util", "time", "sync", "fs"] }
+serde_json.workspace = true
+serde.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+libc = "0.2.191"

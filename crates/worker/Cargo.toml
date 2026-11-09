@@ -1,0 +1,36 @@
+[package]
+name = "promptlab-worker"
+description = "채점 워커: Postgres 채점 큐에서 제출을 하나씩 꺼내 판정기(promptlab-judge HTTP)로 히든 테스트를 돌려 통과 수를 저장한다"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "promptlab-worker"
+path = "src/main.rs"
+
+[dependencies]
+promptlab-shared.workspace = true
+promptlab-store.workspace = true
+promptlab-observability.workspace = true
+# 판정기 요청·응답 타입과 통과 비교(`passed`)만 쓴다 — docker 실행·HTTP 서버는 판정기 컨테이너 몫.
+promptlab-judge = { path = "../judge", default-features = false }
+# 판정기는 compose 내부 HTTP라 TLS가 필요 없다.
+reqwest = { version = "0.12.28", default-features = false, features = ["json"] }
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+uuid.workspace = true
+tokio = { workspace = true, features = ["time"] }
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

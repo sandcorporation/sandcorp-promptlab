@@ -1,0 +1,106 @@
+{
+  "id": "second-largest",
+  "title": "두 번째로 큰 값",
+  "description": "서로 다른 정수 두 개 이상으로 이루어진 배열 `nums`에서 두 번째로 큰 값을 반환하세요.\n\n**공개 픽스처 문항** — 개발·CI용이며 운영 문제은행이 아닙니다.",
+  "signature": {
+    "name": "second_largest",
+    "params": [
+      {
+        "name": "nums",
+        "type": "int[]"
+      }
+    ],
+    "returns": "int"
+  },
+  "examples": [
+    {
+      "args": [
+        [
+          3,
+          1,
+          2
+        ]
+      ],
+      "expected": 2
+    },
+    {
+      "args": [
+        [
+          10,
+          20
+        ]
+      ],
+      "expected": 10
+    },
+    {
+      "args": [
+        [
+          -1,
+          -2,
+          -3
+        ]
+      ],
+      "expected": -2
+    }
+  ],
+  "hidden": [
+    {
+      "args": [
+        [
+          5101,
+          5303,
+          5202,
+          5404
+        ]
+      ],
+      "expected": 5303
+    },
+    {
+      "args": [
+        [
+          -8801,
+          -8802,
+          -8803,
+          -8804
+        ]
+      ],
+      "expected": -8802
+    },
+    {
+      "args": [
+        [
+          60001,
+          70002,
+          50003,
+          80004,
+          40005
+        ]
+      ],
+      "expected": 70002
+    },
+    {
+      "args": [
+        [
+          123,
+          456,
+          789,
+          1011,
+          1213
+        ]
+      ],
+      "expected": 1011
+    },
+    {
+      "args": [
+        [
+          909090,
+          808080,
+          707070
+        ]
+      ],
+      "expected": 808080
+    }
+  ],
+  "reference_language": "python",
+  "reference_solution": "def second_largest(nums: list[int]) -> int:\n    return sorted(nums)[-2]\n"
+}

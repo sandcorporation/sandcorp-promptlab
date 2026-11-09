@@ -1,0 +1,21 @@
+<!doctype html>
+<!-- 운영 대시보드 껍데기. docker/server.Dockerfile 이 wasm-bindgen(--target web) 산출물과 함께 /opt/promptlab/dashboard 에 넣고,
+     서버가 API에 없는 경로를 모두 이 파일로 답한다(/exam-invite/… 같은 화면 주소). 그래서 스크립트 경로는 절대 경로다.
+     개발(dx serve)은 이 파일을 쓰지 않는다. -->
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>promptlab 대시보드</title>
+  <link rel="icon" type="image/svg+xml" href="/design/mark.svg" media="(prefers-color-scheme: light)">
+  <link rel="icon" type="image/svg+xml" href="/design/mark-dark.svg" media="(prefers-color-scheme: dark)">
+</head>
+<body>
+  <div id="main"></div>
+  <script type="module">
+    import init from "/promptlab-dashboard.js";
+    init({ module_or_path: "/promptlab-dashboard_bg.wasm" });
+  </script>
+</body>
+</html>

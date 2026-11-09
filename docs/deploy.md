@@ -7,7 +7,7 @@ promptlab.sandcorp.co.kr — 다른 서비스와 같은 틀(GitHub Actions가 �
 
 ```
 PR → Actions PR 검사 → main 병합
-   → release.yml(push main): check(pr-check.yml workflow_call) → image(image.yml, 이미지 셋 matrix) → promote(production fast-forward)
+   → release.yml(push main): check(pr-check.yml workflow_call) ∥ image(image.yml, 이미지 셋 matrix, check와 병렬) → promote(둘 다 초록일 때만 production fast-forward)
    → Jenkins sandcorp-promptlab(*/production): 이미지 셋 <sha>가 ghcr에 있는지 확인(5분) → extraCheckouts(문제은행) → oracle 배포
 ```
 
@@ -23,7 +23,7 @@ PR → Actions PR 검사 → main 병합
 
 | 파일 | 역할 |
 |---|---|
-| `.github/workflows/release.yml` | main push → 검사(`pr-check.yml` 재사용) → 이미지 셋(`image.yml`) → `production` fast-forward(`scripts/ci/promote.sh`) |
+| `.github/workflows/release.yml` | main push → 검사(`pr-check.yml` 재사용)와 이미지 셋(`image.yml`)을 병렬로 → 둘 다 초록이면 `production` fast-forward(`scripts/ci/promote.sh`) |
 | `Jenkinsfile` | production 배포(`deployFrom: 'production'`). 잡 이름 `sandcorp-promptlab`, Script Path `Jenkinsfile`, 브랜치 지정자 `*/production`. 굽지도 검사하지도 않는다 — 비상 길 `BUILD_ON=jenkins`에서만 굽고 `check`(`scripts/ci/check.sh --quick`, fmt·.ps1 BOM만, #140)를 돈다 |
 | `compose.oracle.yaml` | 프로젝트 `promptlab-prod`: `db`(promptlab 전용 Postgres 17) · `server` · `worker` · `judge` · `docker-proxy` · `turn` |
 | `docker/server.Dockerfile` | 서버·워커 이미지(바이너리 둘) + 대시보드 정적 파일 |

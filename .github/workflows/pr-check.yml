@@ -1,8 +1,11 @@
 # PR 검사(#138) — scripts/ci/check.sh 와 같은 단계(fmt·ps1 BOM·clippy -D warnings·빌드·대시보드 wasm32·시험)를
 # GitHub 호스팅 실행기에서 돈다. Jenkins PR 잡(Jenkinsfile.pr)과 같은 것이고, 공개 저장소로 옮긴 뒤 그 잡을 대신한다.
 #
+# main push에서는 release.yml이 이 워크플로를 workflow_call로 불러 같은 검사를 돌린다(#8) — 통과해야 이미지·승격으로 간다.
+# 그때 github.ref는 부른 쪽의 refs/heads/main이라 rust-cache 저장 조건(main에서만)이 그대로 맞는다.
+#
 # 보안 규칙(공개 저장소 — 남의 PR 코드가 돈다):
-# - 트리거는 pull_request·push(main)만. pull_request_target 금지(포크 PR에 쓰기 토큰·비밀이 간다).
+# - 트리거는 pull_request·workflow_call(release.yml)만. pull_request_target 금지(포크 PR에 쓰기 토큰·비밀이 간다).
 # - GitHub 호스팅 실행기(ubuntu-latest)만. self-hosted 금지.
 # - 권한 contents: read 하나, secrets 0개 — 시험 DB 비밀번호는 service container 안에서만 쓰는 시험용 값이다.
 # - 액션은 공식(actions/*)과 캐시용 Swatinem/rust-cache만, 커밋 SHA로 고정한다(태그는 옮겨질 수 있다).
@@ -11,14 +14,14 @@ name: PR 검사
 
 on:
   pull_request:
-  push:
-    branches: [main]
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: pr-check-${{ github.ref }}
+  # PR은 번호마다 새 push가 옛 실행을 끊는다. main(workflow_call)은 커밋마다 따로 — 끊기면 그 sha의 승격 실행이 취소로 끝난다.
+  group: pr-check-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -76,6 +79,10 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      # production 승격 스크립트 시험(#8) — 로컬 bare 저장소만, 네트워크·토큰 없음.
+      - name: 승격 스크립트 시험
+        run: bash scripts/ci/promote_test.sh
 
       - name: 검사(scripts/ci/check.sh 단계)
         run: bash scripts/ci/check.sh

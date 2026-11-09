@@ -146,7 +146,7 @@ Windows **호스트**(대표 데스크톱)의 Jenkins 에이전트 — 제한 �
 
 ## 배포
 
-`main` 병합 → Jenkins `sandcorp-promptlab`(`Jenkinsfile`, 공용 라이브러리 `sandcorpDeploy` — 배포 전 check는 `check.sh --quick`(fmt·.ps1 BOM만, #140: 빌드 노드 링크 OOM), 레지스트리 캐시 마운트는 `sharing=locked`(병렬 단계 압축 풀기 경합)) → oracle(arm64) `compose.oracle.yaml`. 도메인 promptlab.sandcorp.co.kr, 서비스 `server`·`worker`(모델 없음, 모델 볼륨·받기 단계 없음)·`judge`·`docker-proxy`(소켓은 여기만)·`db`·`turn`, 이미지 셋(server·judge·docker-proxy). 러너 이미지는 프록시가 시작할 때 받는다(판·digest는 `RUNNER_IMAGES`). 판정기 예산 = 러너 컨테이너 동시 2 × (CPU 1·512m, compose 밖 형제 컨테이너). 구성·`.env`·CPU 상한 근거는 `docs/deploy.md`.
+`main` 병합 → GitHub Actions `release.yml`(검사 = `pr-check.yml` workflow_call → 이미지 셋 `image.yml`(`ubuntu-24.04-arm`, linux/arm64, `ghcr.io/sandcorporation/<이름>:<sha>`) → `production` fast-forward `scripts/ci/promote.sh`, #8) → Jenkins `sandcorp-promptlab`(`Jenkinsfile`, 공용 라이브러리 `sandcorpDeploy` `deployFrom: 'production'` — production만 보고 굽지도 검사하지도 않는다. 비상 길 `BUILD_ON=jenkins`만 굽고 check `check.sh --quick`(fmt·.ps1 BOM만, #140), 레지스트리 캐시 마운트는 `sharing=locked`(병렬 단계 압축 풀기 경합)) → oracle(arm64) `compose.oracle.yaml`. **운영 판 = production 머리**(사람이 push하지 않는다). 되돌리기는 main에 revert PR(정석), 급하면 Jenkins `ROLLBACK_SHA`(옛 이미지로 배포, production 그대로) — `docs/deploy.md` 「배포 흐름·되돌리기」. 도메인 promptlab.sandcorp.co.kr, 서비스 `server`·`worker`(모델 없음, 모델 볼륨·받기 단계 없음)·`judge`·`docker-proxy`(소켓은 여기만)·`db`·`turn`, 이미지 셋(server·judge·docker-proxy). 러너 이미지는 프록시가 시작할 때 받는다(판·digest는 `RUNNER_IMAGES`). 판정기 예산 = 러너 컨테이너 동시 2 × (CPU 1·512m, compose 밖 형제 컨테이너). 구성·`.env`·CPU 상한 근거는 `docs/deploy.md`.
 
 ## 시험
 
@@ -169,7 +169,7 @@ Windows **호스트**(대표 데스크톱)의 Jenkins 에이전트 — 제한 �
   - 시험 DB: 실행마다 `postgres:17-alpine` 컨테이너(`promptlab-ci-pg-<pid>-<rand>`)를 전용 네트워크(`promptlab-ci-net-…`)에 띄운다. 포트를 열지 않고 데이터는 tmpfs, 끝나면 컨테이너·네트워크를 지운다.
   - 캐시: named volume `promptlab-ci-cargo`(레지스트리)·`promptlab-ci-target`(target). 이미지 `promptlab-ci:rust-<버전>-<Dockerfile cksum>`.
   - 소스는 bind mount가 아니라 tar로 넣는다(home 빌드 노드는 호스트 docker 소켓을 쓰는 컨테이너라 작업 공간 경로가 호스트에 없다).
-- PR 검사 = **GitHub Actions** `.github/workflows/pr-check.yml`(#138 — `pull_request`·`push: main`, ubuntu-latest, `contents: read`, secrets 없음, 액션 SHA 고정, Postgres service container, `PROMPTLAB_CI_INSIDE=1 bash scripts/ci/check.sh`). **병합 조건은 `gh pr checks <N>` 전부 pass**(2026-11-09부터). Jenkins PR 잡 `Jenkinsfile.pr`(`sandcorpPrCheck`, 상태 `continuous-integration/jenkins/pr-merge`)은 남아 있어도 기다리지 않는다. 배포 잡의 check는 `--quick`(위 「배포」).
+- PR 검사 = **GitHub Actions** `.github/workflows/pr-check.yml`(#138 — `pull_request`·`workflow_call`(main push는 `release.yml`이 불러 같은 검사 뒤 이미지·승격, #8), ubuntu-latest, `contents: read`, secrets 없음, 액션 SHA 고정, Postgres service container, `PROMPTLAB_CI_INSIDE=1 bash scripts/ci/check.sh`). **병합 조건은 `gh pr checks <N>` 전부 pass**(2026-11-09부터). Jenkins PR 잡 `Jenkinsfile.pr`(`sandcorpPrCheck`, 상태 `continuous-integration/jenkins/pr-merge`)은 남아 있어도 기다리지 않는다. 배포 잡은 검사하지 않는다(비상 길만 `--quick`, 위 「배포」).
 - 링크 메모리(#46): `Cargo.toml`의 `[profile.dev] debug = 0`(시험도 dev를 물려받음) — ci 이미지에서 `cargo test -p promptlab-app --no-run` 최대 RSS 전체 빌드 2.85GB→1.68GB, 재링크 2.85GB→1.19GB(macOS 노드 `ld` OOM 대응). 되돌리면 배포 잡이 다시 죽을 수 있다.
 - 툴체인을 올릴 때는 `rust-toolchain.toml`의 `channel`만 바꾼다(CI 이미지가 그 값을 읽는다).
 

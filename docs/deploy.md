@@ -1,20 +1,37 @@
 # 운영 배포 (oracle)
 
-promptlab.sandcorp.co.kr — 다른 서비스와 같은 틀(Jenkins `sandcorpDeploy`, mac/home 이미지 빌드, oracle pull 배포).
+promptlab.sandcorp.co.kr — 다른 서비스와 같은 틀(GitHub Actions가 검사·이미지 굽기·`production` 승격, Jenkins `sandcorpDeploy`가 production만 oracle에 pull 배포 — 아래 「배포 흐름·되돌리기」).
 파이프라인은 공용 라이브러리 `sandcorp`(jenkins-shared README)에 있고 이 저장소는 값만 넘긴다(`Jenkinsfile`).
+
+## 배포 흐름·되돌리기(#8)
+
+```
+PR → Actions PR 검사 → main 병합
+   → release.yml(push main): check(pr-check.yml workflow_call) → image(image.yml, 이미지 셋 matrix) → promote(production fast-forward)
+   → Jenkins sandcorp-promptlab(*/production): 이미지 셋 <sha>가 ghcr에 있는지 확인(5분) → extraCheckouts(문제은행) → oracle 배포
+```
+
+- **운영 판 = `production` 브랜치 머리.** 사람이 직접 push하지 않는다 — `release.yml`의 승격 잡(`contents: write`는 이 잡만)이 `scripts/ci/promote.sh ff <sha>`로 앞으로만 옮긴다(강제 없음, 이미 더 새 판이면 건너뜀). 저장소 ruleset이 production의 강제 push·삭제를 막는다.
+- 검사나 이미지 하나라도 실패하면 승격이 없고 운영은 그대로다. 실패한 잡을 다시 돌리면(같은 sha) 이어서 승격한다.
+- `GITHUB_TOKEN`의 production push는 Actions를 다시 깨우지 않고 저장소 웹훅으로 Jenkins만 깨운다. main push도 Jenkins를 깨우지만 production이 그대로면 「이미 배포한 sha」로 건너뛴다.
+- **되돌리기 — 정석**: main에 revert PR을 내 병합한다. 검사·이미지·승격·배포를 그대로 탄다(production이 앞으로 간다).
+- **되돌리기 — 급할 때**: Jenkins 「Build with Parameters」에 `ROLLBACK_SHA=<옛 sha 40자>`. 빌드 없이 그 sha의 이미지 셋으로 배포한다(이미지가 ghcr에 남아 있어야 한다). production은 그대로라 다음 승격이 다시 앞으로 가니, 이어서 revert PR을 낸다. production을 옛 sha로 강제로 옮기는 워크플로는 두지 않는다(ruleset이 Actions를 예외로 받지 않는다).
+- **Actions가 못 구울 때**: Jenkins `BUILD_ON=jenkins`(production 머리를 Jenkins 빌드 노드에서 굽고 배포).
+- 숨은 문항 데이터는 Actions에 없다 — 검사는 공개 픽스처로 돌고, 운영 문항은 Jenkins 배포 단계에서만 받는다(아래 「문제은행 디렉터리」).
 
 ## 구성
 
 | 파일 | 역할 |
 |---|---|
-| `Jenkinsfile` | main 배포. 잡 이름 `sandcorp-promptlab`, Script Path `Jenkinsfile`. 배포 전 `check`는 `scripts/ci/check.sh --quick`(fmt·.ps1 BOM만, #140) — 시험 전부는 GitHub Actions가 PR과 main push에서 돈다 |
+| `.github/workflows/release.yml` | main push → 검사(`pr-check.yml` 재사용) → 이미지 셋(`image.yml`) → `production` fast-forward(`scripts/ci/promote.sh`) |
+| `Jenkinsfile` | production 배포(`deployFrom: 'production'`). 잡 이름 `sandcorp-promptlab`, Script Path `Jenkinsfile`, 브랜치 지정자 `*/production`. 굽지도 검사하지도 않는다 — 비상 길 `BUILD_ON=jenkins`에서만 굽고 `check`(`scripts/ci/check.sh --quick`, fmt·.ps1 BOM만, #140)를 돈다 |
 | `compose.oracle.yaml` | 프로젝트 `promptlab-prod`: `db`(promptlab 전용 Postgres 17) · `server` · `worker` · `judge` · `docker-proxy` · `turn` |
 | `docker/server.Dockerfile` | 서버·워커 이미지(바이너리 둘) + 대시보드 정적 파일 |
 | `docker/judge.Dockerfile` | 판정기 이미지(`promptlab-judge` + docker CLI 정적 바이너리, nobody) |
 | `docker/docker-proxy.Dockerfile` | 본문 검사 docker 소켓 프록시 이미지(`promptlab-docker-proxy`) |
 
-- 이미지 셋: `ghcr.io/sandcorporation/sandcorp-promptlab:<sha>`(`PROMPTLAB_IMAGE`) · `…/sandcorp-promptlab-judge:<sha>`(`PROMPTLAB_JUDGE_IMAGE`) · `…/sandcorp-promptlab-docker-proxy:<sha>`(`PROMPTLAB_PROXY_IMAGE`), **linux/arm64**(공용 라이브러리 기본, 세 Dockerfile 모두 amd64로도 구워진다). 빌드 노드는 macos(M4, arm64 네이티브)를 먼저 잡고, 못 잡으면 home(QEMU 에뮬레이션 — Rust 컴파일이라 느리다). oracle은 pull만 한다.
-- **배포 check를 가볍게 둔 까닭(#140)**: 빌드 노드(mac Docker 12.5GB)에서 `check.sh` 전부의 시험 링크가 OOM(`ld … signal 9`)으로 죽어 배포가 막혔다. 병합 조건은 GitHub Actions `PR 검사`(`.github/workflows/pr-check.yml`) 초록이고 main push도 Actions가 다시 돈다. 컴파일 오류는 바로 뒤 이미지 굽기가 잡는다.
+- 이미지 셋: `ghcr.io/sandcorporation/sandcorp-promptlab:<sha>`(`PROMPTLAB_IMAGE`) · `…/sandcorp-promptlab-judge:<sha>`(`PROMPTLAB_JUDGE_IMAGE`) · `…/sandcorp-promptlab-docker-proxy:<sha>`(`PROMPTLAB_PROXY_IMAGE`), **linux/arm64** 하나(세 Dockerfile 모두 amd64로도 구워진다). GitHub Actions `image.yml`이 `ubuntu-24.04-arm` 실행기에서 네이티브로 굽고 `GITHUB_TOKEN`으로 올린다(#8, 라벨 `org.opencontainers.image.source`·`revision`, 빌드 캐시 `<이미지>:buildcache`). 비공개 git 의존성·빌드 인자 비밀은 없다. oracle은 pull만 한다. 비상 길 `BUILD_ON=jenkins`는 옛 Jenkins 빌드(macos 먼저, 못 잡으면 home QEMU)로 같은 태그를 굽는다.
+- **비상 길 check를 가볍게 둔 까닭(#140)**: 빌드 노드(mac Docker 12.5GB)에서 `check.sh` 전부의 시험 링크가 OOM(`ld … signal 9`)으로 죽어 배포가 막혔다. 병합 조건은 GitHub Actions `PR 검사`(`.github/workflows/pr-check.yml`) 초록이고 main push도 `release.yml`이 같은 검사를 다시 돈다. 컴파일 오류는 이미지 굽기가 잡는다.
 - **cargo 레지스트리 캐시 마운트는 `sharing=locked`(#140)**: `id=promptlab-cargo-registry`를 server(build·dashboard 단계)·judge·docker-proxy 이미지가 함께 쓴다. BuildKit 병렬 단계가 같은 크레이트를 동시에 풀다 「failed to unpack package … File exists (os error 17)」로 깨졌다. 잠금으로 한 번에 한 RUN만 쓰게 했다(단계별 id 분리는 레지스트리를 따로 받고 동시 컴파일로 메모리를 더 먹어 택하지 않았다). 러너 Dockerfile도 같다.
 - 러너 이미지 4개(`RUNNER_IMAGES`)는 배포 잡이 굽지 않는다 — `Jenkinsfile.runners`가 굽고 GHCR에 올린다(아래 「러너 이미지」).
 - 공개 진입: NPM(host 네트워크) → `127.0.0.1:18096`(server). 호스트 포트는 루프백에만 열리고 `.env`의 `PROMPTLAB_HOST_PORT`로 바꾼다.

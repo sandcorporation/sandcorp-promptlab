@@ -12,8 +12,8 @@
 # 이미지마다 잡 하나(strategy.matrix.include, fail-fast: false). 같은 목록이 Jenkinsfile의 images에 있다 — 함께 고친다.
 # 이미지 이름·태그·라벨은 옛 Jenkins 빌드(jenkins-shared build-image.sh)와 같다:
 #   ghcr.io/sandcorporation/<name>:<커밋 sha 40자>, linux/arm64 하나, provenance 없음, 라벨 source·revision.
-# 빌드 캐시는 이미지마다 같은 패키지의 :buildcache 태그(레지스트리 캐시, mode=max). Dockerfile의 cargo 캐시 마운트는
-# 실행기마다 비어 있어 바뀐 소스는 처음부터 컴파일한다(층 캐시는 apt·wasm-bindgen 설치 같은 앞 단계만 맞는다).
+# 빌드 캐시는 이미지마다 같은 패키지의 :buildcache 태그(레지스트리 캐시, mode=max). server Dockerfile은 cargo-chef로
+# 의존성 컴파일(cook)을 층에 두어(마운트 없음) 소스만 바뀌면 그 층이 registry 캐시로 적중한다(#10).
 name: image
 
 on:

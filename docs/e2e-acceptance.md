@@ -6,9 +6,9 @@ spec #93 「받아들임」, 티켓 #101. **운영에서 코딩 문제 1개를 W
 
 | 무엇 | 비고 |
 |---|---|
-| Windows 11 PC 한 대(대화형 로그인 세션) | **RAM 16GB 이상**, 웹캠, (있으면) GPU — Jenkins 에이전트의 세션 0이 아니라 **사람이 로그인한 데스크톱**에서 한다 |
+| Windows 11 PC 한 대(대화형 로그인 세션) | **RAM 16GB 이상**, 웹캠, (있으면) GPU — **사람이 로그인한 데스크톱**에서 한다 |
 | Docker Desktop(Linux 컨테이너 모드) 설치·실행 | 라이선스 안내: 개인 사용은 무료, 일정 규모 이상 기업의 업무용 사용은 유료 |
-| 설치 파일 `promptlab-app-setup-<버전>.exe` | Jenkins 잡 `sandcorp-promptlab-windows`의 산출물(`archiveArtifacts`). 서명 인증서가 없으면 SmartScreen 경고가 뜬다(「추가 정보 → 실행」) |
+| 설치 파일 `promptlab-app-setup-<버전>.exe` | Actions `.github/workflows/windows-build.yml`의 artifact. 서명 인증서가 없으면 SmartScreen 경고가 뜬다(「추가 정보 → 실행」) |
 | 대표(또는 출제자) 계정으로 대시보드 로그인 | https://promptlab.sandcorp.co.kr — 시범 조직이 **승인**된 상태여야 시험을 만들 수 있다(운영자 화면 「시범 조직 승인」) |
 | 응시자용 이메일·카카오 계정 | 초대 메일을 받을 수 있는 주소(본인 다른 주소 가능) |
 | 대화 평가 키 | 서버 env `PROMPTLAB_ANTHROPIC_API_KEY`가 있어야 AI 활용 평가·리포트가 켜진다(없으면 아래 8번에서 「평가 없음」이 정상) |
@@ -68,5 +68,5 @@ spec #93 「받아들임」, 티켓 #101. **운영에서 코딩 문제 1개를 W
 
 ## 미리 알아 둘 것
 
-- 스모크(Jenkins `sandcorp-promptlab-windows`)는 **기계 주체**로 같은 서버에 응시하되 화면·웹캠·AI 도우미는 건너뛴다. 이 체크리스트가 그 빈틈이다.
-- Docker가 서비스 계정에서 안 닿거나 모델 받기가 끊기는 문제는 `docs/windows-host.md`의 「서비스 계정 함정」·「설치 파일」을 본다.
+- CI는 Windows 앱 빌드만 수행한다. `e2e/smoke.ps1`은 운영 제출을 포함하므로 자동 CI에 연결하지 않는다; 이 체크리스트가 화면·웹캠·AI 도우미 인수 범위를 다룬다.
+- Windows 빌드와 모델 다운로드 설명은 `docs/windows-host.md`를 본다.

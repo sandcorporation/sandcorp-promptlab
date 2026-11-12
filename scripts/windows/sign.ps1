@@ -1,6 +1,6 @@
 ﻿# 코드 서명(선택). 인증서가 있으면 서명하고, 없으면 「건너뜀」을 분명히 찍고 0 으로 끝난다(시범 배포는 서명 없이).
 #   -Path       서명할 파일들(exe)
-#   -PfxPath    인증서 .pfx (Jenkins 자격 `promptlab-codesign-pfx`(파일)가 넘긴다). 비어 있으면 건너뜀.
+#   -PfxPath    인증서 .pfx (선택, 호출자가 경로로 전달). 비어 있으면 건너뜀.
 #   -PfxPassword 인증서 비밀번호(자격 `promptlab-codesign-pfx-password`). 로그에 찍지 않는다.
 param(
   [Parameter(Mandatory)][string[]]$Path,

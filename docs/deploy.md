@@ -7,7 +7,7 @@ promptlab.sandcorp.co.kr — 다른 서비스와 같은 틀(GitHub Actions가 �
 
 ```
 PR → Actions PR 검사 → main 병합
-   → release.yml(push main): check(pr-check.yml workflow_call) ∥ image(image.yml, 이미지 셋 matrix, check와 병렬) → promote(둘 다 초록일 때만 production fast-forward)
+   → release.yml(push main): check(pr-check.yml) ∥ image(image.yml) ∥ Windows build → promote(세 작업 모두 초록일 때만 production fast-forward)
    → Jenkins sandcorp-promptlab(*/production): 이미지 셋 <sha>가 ghcr에 있는지 확인(5분) → extraCheckouts(문제은행) → oracle 배포
 ```
 
@@ -16,24 +16,26 @@ PR → Actions PR 검사 → main 병합
 - `GITHUB_TOKEN`의 production push는 Actions를 다시 깨우지 않고 저장소 웹훅으로 Jenkins만 깨운다. main push도 Jenkins를 깨우지만 production이 그대로면 「이미 배포한 sha」로 건너뛴다.
 - **되돌리기 — 정석**: main에 revert PR을 내 병합한다. 검사·이미지·승격·배포를 그대로 탄다(production이 앞으로 간다).
 - **되돌리기 — 급할 때**: Jenkins 「Build with Parameters」에 `ROLLBACK_SHA=<옛 sha 40자>`. 빌드 없이 그 sha의 이미지 셋으로 배포한다(이미지가 ghcr에 남아 있어야 한다). production은 그대로라 다음 승격이 다시 앞으로 가니, 이어서 revert PR을 낸다. production을 옛 sha로 강제로 옮기는 워크플로는 두지 않는다(ruleset이 Actions를 예외로 받지 않는다).
-- **Actions가 못 구울 때**: Jenkins `BUILD_ON=jenkins`(production 머리를 Jenkins 빌드 노드에서 굽고 배포).
+- **Actions가 못 구울 때**: Actions 이미지 빌드가 실패하면 production 승격이 되지 않는다; Jenkins는 이미지 빌드 우회 경로를 제공하지 않는다.
 - 숨은 문항 데이터는 Actions에 없다 — 검사는 공개 픽스처로 돌고, 운영 문항은 Jenkins 배포 단계에서만 받는다(아래 「문제은행 디렉터리」).
 
 ## 구성
 
 | 파일 | 역할 |
 |---|---|
-| `.github/workflows/release.yml` | main push → 검사(`pr-check.yml` 재사용)와 이미지 셋(`image.yml`)을 병렬로 → 둘 다 초록이면 `production` fast-forward(`scripts/ci/promote.sh`) |
-| `Jenkinsfile` | production 배포(`deployFrom: 'production'`). 잡 이름 `sandcorp-promptlab`, Script Path `Jenkinsfile`, 브랜치 지정자 `*/production`. 굽지도 검사하지도 않는다 — 비상 길 `BUILD_ON=jenkins`에서만 굽고 `check`(`scripts/ci/check.sh --quick`, fmt·.ps1 BOM만, #140)를 돈다 |
+| `.github/workflows/release.yml` | main push → 검사(`pr-check.yml`), 이미지 셋(`image.yml`), Windows build를 병렬 실행 → 전부 초록이면 `production` fast-forward(`scripts/ci/promote.sh`) |
+| `.github/workflows/windows-build.yml` | PR과 main release의 Windows app/installer build, PowerShell 구문 검사 |
+| `.github/workflows/build-runners.yml` | runner images의 Actions 수동 publish |
+| `Jenkinsfile` | production 배포(`deployFrom: 'production'`). 잡 `sandcorp-promptlab`은 Script Path `Jenkinsfile`, 브랜치 지정자 `*/production`. Jenkins는 Actions 게시 이미지만 배포한다 |
 | `compose.oracle.yaml` | 프로젝트 `promptlab-prod`: `db`(promptlab 전용 Postgres 17) · `server` · `worker` · `judge` · `docker-proxy` · `turn` |
 | `docker/server.Dockerfile` | 서버·워커 이미지(바이너리 둘) + 대시보드 정적 파일 |
 | `docker/judge.Dockerfile` | 판정기 이미지(`promptlab-judge` + docker CLI 정적 바이너리, nobody) |
 | `docker/docker-proxy.Dockerfile` | 본문 검사 docker 소켓 프록시 이미지(`promptlab-docker-proxy`) |
 
-- 이미지 셋: `ghcr.io/sandcorporation/sandcorp-promptlab:<sha>`(`PROMPTLAB_IMAGE`) · `…/sandcorp-promptlab-judge:<sha>`(`PROMPTLAB_JUDGE_IMAGE`) · `…/sandcorp-promptlab-docker-proxy:<sha>`(`PROMPTLAB_PROXY_IMAGE`), **linux/arm64** 하나(세 Dockerfile 모두 amd64로도 구워진다). GitHub Actions `image.yml`이 `ubuntu-24.04-arm` 실행기에서 네이티브로 굽고 `GITHUB_TOKEN`으로 올린다(#8, 라벨 `org.opencontainers.image.source`·`revision`, 빌드 캐시 `<이미지>:buildcache`). 비공개 git 의존성·빌드 인자 비밀은 없다. oracle은 pull만 한다. 비상 길 `BUILD_ON=jenkins`는 옛 Jenkins 빌드(macos 먼저, 못 잡으면 home QEMU)로 같은 태그를 굽는다.
-- **비상 길 check를 가볍게 둔 까닭(#140)**: 빌드 노드(mac Docker 12.5GB)에서 `check.sh` 전부의 시험 링크가 OOM(`ld … signal 9`)으로 죽어 배포가 막혔다. 병합 조건은 GitHub Actions `PR 검사`(`.github/workflows/pr-check.yml`) 초록이고 main push도 `release.yml`이 같은 검사를 다시 돈다. 컴파일 오류는 이미지 굽기가 잡는다.
+- 이미지 셋: `ghcr.io/sandcorporation/sandcorp-promptlab:<sha>`(`PROMPTLAB_IMAGE`) · `…/sandcorp-promptlab-judge:<sha>`(`PROMPTLAB_JUDGE_IMAGE`) · `…/sandcorp-promptlab-docker-proxy:<sha>`(`PROMPTLAB_PROXY_IMAGE`), **linux/arm64** 하나. GitHub Actions `image.yml`이 `ubuntu-24.04-arm`에서 빌드해 `GITHUB_TOKEN`으로 올린다(#8, source·revision 라벨과 GHCR build cache). 비공개 git 의존성·비밀 build args는 없다. Jenkins/oracle은 GHCR에서 pull만 한다.
+- **전체 테스트는 GitHub Actions PR 검사와 `release.yml`에서 실행한다. Jenkins 배포 pipeline에는 check/build 단계가 없다.**
 - **server 이미지 의존성 층 분리(#10)**: `docker/server.Dockerfile`은 cargo-chef(`prepare`→`cook`)로 의존성 컴파일을 BuildKit 층에 둔다. 소스만 바뀌면 recipe.json이 같아 cook 층(서버·워커, 대시보드 wasm32)이 `:buildcache`(mode=max)로 적중한다. 캐시 마운트(`--mount=type=cache`)는 registry 캐시에 실리지 않아 새 실행기마다 비었기에 server Dockerfile에서는 걷었고, 그래서 레지스트리 공유 잠금(#140)도 이 이미지에는 필요 없다(build·dashboard 단계는 병렬). 로컬 amd64 측정: 빈 캐시 3m51s → 소스 한 줄 변경 51s. Actions(arm64) 첫 병합 실행(#11, 캐시 비어 있음): server 잡 6m24s(check 5m24s·judge 1m08s·docker-proxy 55s·promote 7s, 병합→승격 12m08s). judge·docker-proxy Dockerfile은 그대로라 `id=promptlab-cargo-registry`·`sharing=locked`(#140: 병렬 압축 풀기 경합 「File exists」 방지)를 유지한다. 러너 Dockerfile도 같다.
-- 러너 이미지 4개(`RUNNER_IMAGES`)는 배포 잡이 굽지 않는다 — `Jenkinsfile.runners`가 굽고 GHCR에 올린다(아래 「러너 이미지」).
+- 러너 이미지 4개(`RUNNER_IMAGES`)는 Actions `.github/workflows/build-runners.yml`의 수동 실행으로 빌드·게시하고 digest artifact를 남긴다(아래 「러너 이미지」).
 - 공개 진입: NPM(host 네트워크) → `127.0.0.1:18096`(server). 호스트 포트는 루프백에만 열리고 `.env`의 `PROMPTLAB_HOST_PORT`로 바꾼다.
 - 서버는 같은 API를 `/`와 `/api` 두 곳에서 받는다. 계정(#7) 경로: `/api/auth/login`·`/api/auth/callback`(대시보드 로그인), `/api/oauth/app-client.json`(응시 앱 CIMD — auth가 이 URL을 받아 간다), `/.well-known/oauth-protected-resource/api`(RFC 9728).
 - 대시보드(Dioxus 웹)는 로그인·조직·구성원 화면이 생겼지만 정적 서빙은 아직 없다(후속). 그래서 로그인 뒤 돌아가는 `https://promptlab.sandcorp.co.kr/…`는 지금 서버 404다.
@@ -76,8 +78,10 @@ SSH Username with private key, 호스트 키는 GitHub 공개 키 고정), compo
 
 ### 러너 이미지
 
+`build-runners.yml`을 Actions에서 수동 실행한다. 빌드는 `bash scripts/build-runners.sh`를 호출하고 digest를 artifact로 남긴다. 코드가 바뀐 판을 올릴 때는 새 `RUNNER_TAG`로 변경한 뒤 결과 digest를 `crates/shared/src/coding/mod.rs`의 `RUNNER_IMAGES`에 반영한다.
+
 - 판정기는 `--pull never`이고 프록시는 클라이언트의 pull(`POST /images/create`)을 막는다. 그래서 **docker 소켓을 가진 `docker-proxy`가 시작할 때** `RUNNER_IMAGES`의 참조 4개(`RunnerImage::reference()` — digest가 있으면 `name@sha256:…`, 아직 없으면 `name:태그`, 판정기가 `docker run`에 넘기는 것과 같은 문자열)를 소켓에 직접 받는다(`crates/docker-proxy/src/pull.rs`). 이미 있으면 받지 않고, 실패하면 10초부터 두 배씩(최대 10분) 다시 한다. 받는 동안에도 판정 요청은 넘긴다 — 이미지가 없으면 만들기가 실패 → 판정기 503 → 워커가 큐로 되돌린다.
-- 이 방법을 고른 까닭: 참조의 정본이 Rust 상수 한 곳이라 compose·Jenkinsfile에 digest를 옮겨 적으면 어긋날 수 있다(프록시는 같은 상수로 허용 목록과 받을 목록을 함께 만든다). 공용 라이브러리 `deploy.sh`의 pull 단계는 배포 잡이 구운 `images`만 받고, `migrate` 칸은 소켓 없는 서비스 컨테이너 안에서 돌아 이미지를 받을 수 없다 — 공용 라이브러리를 고치지 않고 되는 길이 이것이다.
+- 이 방법을 고른 까닭: 참조의 정본이 Rust 상수 한 곳이라 compose·Jenkinsfile에 digest를 옮겨 적으면 어긋날 수 있다(프록시는 같은 상수로 허용 목록과 받을 목록을 함께 만든다). Jenkins 배포 pipeline은 Actions가 GHCR에 올린 SHA 태그 이미지만 확인·pull한다. 러너 이미지는 별도 Actions workflow로 publish하고, `docker-proxy`가 시작 시 Rust 상수의 digest를 읽어 받는다.
 - GHCR 패키지는 공개(승인됨, 첫 push 뒤 전환)라 oracle에 로그인이 필요 없다. 공개 전에는 프록시 로그에 `러너 이미지 받기 실패 — 다시 한다`가 찍히고 채점은 503으로 큐에 남는다.
 - 판(태그·digest)을 바꾸면(`crates/shared/src/coding/mod.rs`) 다음 배포의 새 프록시가 새 참조를 받는다. 옛 러너 이미지는 남는다(필요하면 사람이 `docker image rm`).
 

@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
-# PR 검사 = 로컬 검사. fmt → clippy → 빌드 → 시험(시험 DB 포함)을 docker 안에서 돌린다.
-# 빌드 노드(home·macos)에 Rust·webkit2gtk 가 없어도 docker 만 있으면 된다.
+# PR 검사 = fmt → clippy → 빌드 → 시험(시험 DB 포함). GitHub Actions hosted runner에서 실행한다.
 #
-# - home 노드는 Jenkins 컨테이너가 호스트 docker 소켓을 쓰므로 작업 공간을 bind mount 하지 않는다.
-#   소스는 tar 로 컨테이너 stdin 에 흘려 넣는다.
+# - 로컬 docker 실행은 bind mount 없이 소스를 tar 로 컨테이너 stdin 에 흘려 넣는다.
 # - cargo 레지스트리·target 은 named volume(promptlab-ci-cargo, promptlab-ci-target)에 남겨 두 번째부터 빠르다.
 # - 실제 모델 시험(#[ignore] — 재현성·AI 끝에서 끝)은 CI에서 돌리지 않는다(#98): 7B 모델이 4.47GiB 받기·
-#   시험 60초·최대 RSS 7.7GiB라 빌드 노드에 무겁다. 모델·inference·llama.cpp 판을 바꾸는 PR은 로컬에서
+#   시험 60초·최대 RSS 7.7GiB라 CI에 무겁다. 모델·inference·llama.cpp 판을 바꾸는 PR은 로컬에서
 #   `bash scripts/fetch-model.sh && cargo test --release -p promptlab-inference -- --ignored`를 돌려 PR에 적는다.
 #   캐시를 비우려면: docker volume rm promptlab-ci-cargo promptlab-ci-target
 # - 시험 DB: 실행마다 Postgres 컨테이너(promptlab-ci-pg-<pid>-<rand>)를 전용 네트워크에 띄우고 포트는 열지 않는다
@@ -14,9 +12,8 @@
 #   CI 컨테이너는 DATABASE_URL 로 닿고, #[sqlx::test]가 시험마다 새 DB를 만든다.
 set -euo pipefail
 
-# - `--quick`(배포 잡 `Jenkinsfile`의 check, #140): fmt·.ps1 BOM만 본다 — 시험 DB를 띄우지 않고 컴파일하지 않는다.
-#   main은 GitHub Actions(push: main)가 전부 검사하고, 컴파일은 바로 뒤 이미지 굽기가 한다. 빌드 노드(mac Docker 12.5GB)에서
-#   전체 시험의 링크가 OOM(signal 9)으로 죽어 배포가 막혔다. PR 검사(`Jenkinsfile.pr`·Actions)는 인자 없이 전부 돈다.
+# - `--quick`: fmt·.ps1 BOM만 본다 — 시험 DB를 띄우지 않고 컴파일하지 않는다. Deploy-only Jenkins pipeline에서는 쓰지 않는다.
+#   GitHub Actions PR and release workflows run the full checks and tests.
 # Windows PowerShell 5.1은 BOM 없는 UTF-8을 CP949로 읽어 한글 문자열 파서 오류가 난다 — 모든 .ps1은 BOM으로 시작해야 한다.
 check_ps1_bom() {
   local f bad=0

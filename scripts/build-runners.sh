@@ -14,7 +14,7 @@
 #   GHCR_TOKEN    ghcr 쓰기 토큰(push 때). 노드 docker 설정은 건드리지 않고 임시 DOCKER_CONFIG 에만 적는다. 없으면 노드 로그인 그대로
 #   BUILDER_NAME  buildx 빌더(docker-container) 이름, 기본 promptlab-runners
 #   PLATFORMS     기본 linux/amd64,linux/arm64
-#   DIGEST_FILE   digest 를 「언어 digest」 줄로 적을 파일(선택, Jenkins 아카이브용)
+#   DIGEST_FILE   digest 를 「언어 digest」 줄로 적을 파일(선택, Actions 아티팩트용)
 # 토큰 값은 찍지 않는다.
 set -euo pipefail
 

@@ -1,5 +1,5 @@
 # PR 검사(#138) — scripts/ci/check.sh 와 같은 단계(fmt·ps1 BOM·clippy -D warnings·빌드·대시보드 wasm32·시험)를
-# GitHub 호스팅 실행기에서 돈다. Jenkins PR 잡(Jenkinsfile.pr)과 같은 것이고, 공개 저장소로 옮긴 뒤 그 잡을 대신한다.
+# GitHub-hosted runners execute PR validation. There are no Jenkins PR/build jobs.
 #
 # main push에서는 release.yml이 이 워크플로를 workflow_call로 불러 같은 검사를 돌린다(#8) — 통과해야 이미지·승격으로 간다.
 # 그때 github.ref는 부른 쪽의 refs/heads/main이라 rust-cache 저장 조건(main에서만)이 그대로 맞는다.
@@ -83,6 +83,22 @@ jobs:
       # production 승격 스크립트 시험(#8) — 로컬 bare 저장소만, 네트워크·토큰 없음.
       - name: 승격 스크립트 시험
         run: bash scripts/ci/promote_test.sh
+
+      - name: Validate Actions-only CI contract
+        run: python3 scripts/ci/validate-ci-contract.py
+
+      - name: Set up QEMU for runner image validation
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v4.4.0
+
+      - name: Set up Buildx for runner image validation
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Validate multi-architecture runner Dockerfiles
+        run: |
+          for lang in python javascript java cpp; do
+            docker buildx build --platform linux/amd64,linux/arm64 \
+              --file "docker/runners/${lang}.Dockerfile" .
+          done
 
       - name: 검사(scripts/ci/check.sh 단계)
         run: bash scripts/ci/check.sh

@@ -1,7 +1,7 @@
 ﻿# 스모크 기계 토큰(#28): sandcorp-auth `/token` client_credentials 로 액세스 토큰을 받아 이 프로세스의
 # $env:PROMPTLAB_ACCESS_TOKEN 에 넣는다. 규칙은 auth 문서 12절(acct=machine, sub=client:<id>, 수명 600초, refresh 없음).
 #   . scripts\windows\smoke-token.ps1; Set-SmokeToken
-# 입력(Jenkins 문자열 자격 promptlab-smoke-client-id·-secret 이 넣는다):
+# 입력(수동 스모크 호출자가 환경 변수로 전달):
 #   PROMPTLAB_SMOKE_CLIENT_ID · PROMPTLAB_SMOKE_CLIENT_SECRET
 #   PROMPTLAB_AUTH_URL(기본 https://auth.sandcorp.co.kr) · PROMPTLAB_RESOURCE(기본 https://promptlab.sandcorp.co.kr/api)
 # 토큰·시크릿은 찍지 않는다(오류에도 응답 본문의 error 코드만 싣는다). 전송 실패는 재시도 뒤 curl.exe 로 대체(common.ps1).
@@ -17,7 +17,7 @@ $OutputEncoding = New-Object System.Text.UTF8Encoding $false
 
 function Set-SmokeToken {
   if (-not $env:PROMPTLAB_SMOKE_CLIENT_ID -or -not $env:PROMPTLAB_SMOKE_CLIENT_SECRET) {
-    throw 'PROMPTLAB_SMOKE_CLIENT_ID·SECRET 이 없다 — Jenkins 자격 promptlab-smoke-client-id·-secret (docs/windows-host.md 「스모크 계정」)'
+    throw 'PROMPTLAB_SMOKE_CLIENT_ID·SECRET 이 없다 — PROMPTLAB_SMOKE_CLIENT_ID·SECRET 환경 변수 (docs/windows-host.md 「스모크 계정」)'
   }
   $auth = if ($env:PROMPTLAB_AUTH_URL) { $env:PROMPTLAB_AUTH_URL.TrimEnd('/') } else { 'https://auth.sandcorp.co.kr' }
   $resource = if ($env:PROMPTLAB_RESOURCE) { $env:PROMPTLAB_RESOURCE } else { 'https://promptlab.sandcorp.co.kr/api' }

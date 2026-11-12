@@ -1,0 +1,55 @@
+# Windows app build and installer validation. Does not use signing or production smoke credentials.
+name: Windows build
+
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install Windows build tools
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+          $env:PATH = "C:\Program Files (x86)\Inno Setup 6;$env:PATH"
+          if (-not (Test-Path 'C:\Program Files\LLVM\bin\libclang.dll')) { throw 'LLVM libclang is missing from the hosted image' }
+          if (-not (Get-Command iscc.exe -ErrorAction SilentlyContinue)) { throw 'Inno Setup compiler is missing after installation' }
+      - name: Parse Windows PowerShell scripts
+        shell: pwsh
+        run: |
+          $bad = @()
+          Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
+            $tokens = $null; $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { $bad += $errors }
+          }
+          if ($bad.Count) { $bad | Format-List; exit 1 }
+      - name: Build Windows app and installer
+        shell: pwsh
+        run: |
+          rustup show active-toolchain
+          if ($LASTEXITCODE -ne 0) { rustup toolchain install; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }
+          rustc -vV
+          $env:VULKAN_SDK = ''
+          $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin'
+          $env:CARGO_TERM_COLOR = 'never'
+          & scripts\windows\build.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & scripts\windows\build-installer.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: promptlab-windows-installer-${{ github.sha }}
+          path: dist/promptlab-app-setup-*.exe
+          if-no-files-found: error
+          retention-days: 14

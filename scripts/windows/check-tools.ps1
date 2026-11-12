@@ -1,5 +1,5 @@
-﻿# 빌드 에이전트(호스트 서비스 계정 jenkins-agent, 세션 0)에 필요한 도구가 다 있는지 본다(없으면 목록과 원인 힌트를 찍고 실패). docs/windows-host.md 의 설치 목록과 같다.
-# 함정: rustup 은 기본이 사용자별 설치(%USERPROFILE%\.cargo)라 서비스 계정 PATH 에 안 보인다 — RUSTUP_HOME·CARGO_HOME 을 시스템 경로에 두고 jenkins-agent 에 쓰기 권한을 준다.
+﻿# 수동 Windows 스모크 실행 환경에 필요한 도구가 다 있는지 본다(없으면 목록과 원인 힌트를 찍고 실패). docs/windows-host.md 의 설치 목록과 같다.
+# rustup 은 사용자별 설치일 수 있으므로 현재 사용자 PATH에서 확인한다.
 #       시스템 환경변수·PATH 를 바꾼 뒤에는 에이전트 서비스(WinSW)를 다시 시작해야 서비스가 새 값을 본다.
 $ErrorActionPreference = 'Continue'
 # Windows PowerShell 5.1: 콘솔·파이프 인코딩을 UTF-8로 (기본은 OEM/CP949라 한글이 깨진다)
@@ -40,7 +40,7 @@ if ($env:VULKAN_SDK -and (Test-Path (Join-Path $env:VULKAN_SDK 'Bin\glslc.exe'))
 $ErrorActionPreference = 'Continue'   # common.ps1 이 Stop 으로 바꾼다
 $dk = Test-DockerEngine
 if ($dk.Ok) { Write-Host "ok   Docker         $($dk.Detail)" } else { Write-Host "없음 Docker         $($dk.Detail)"; $missing += 'Docker' }
-# 쓰기 권한: cargo 캐시·target(Jenkinsfile.windows 의 C:\promptlab-cache)과 RUSTUP_HOME·CARGO_HOME 에 jenkins-agent 가 쓸 수 있어야 한다.
+# 쓰기 권한: cargo 캐시·target과 RUSTUP_HOME·CARGO_HOME 에 현재 사용자가 쓸 수 있어야 한다.
 foreach ($d in @($env:CARGO_HOME, $env:RUSTUP_HOME, $env:CARGO_TARGET_DIR) | Where-Object { $_ }) {
   if (Test-Path $d) {
     $probe = Join-Path $d ".write-probe-$PID"

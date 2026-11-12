@@ -34,7 +34,7 @@ function Get-ModelDir {
   Join-Path $HOME '.cache\promptlab\models'
 }
 
-# cargo 가 만드는 target 디렉터리: Jenkinsfile.windows 가 CARGO_TARGET_DIR 을 걸면 그것, 없으면 $Root\target.
+# cargo 가 만드는 target 디렉터리: CARGO_TARGET_DIR 환경 변수가 있으면 그것, 없으면 $Root\target.
 function Get-TargetDir {
   if ($env:CARGO_TARGET_DIR) { return $env:CARGO_TARGET_DIR }
   Join-Path $Root 'target'
@@ -193,7 +193,7 @@ function Invoke-Http {
 }
 
 # ---- Docker Desktop(호스트 네이티브) 확인 — check-tools.ps1 과 스모크가 같이 쓴다(#101) ----
-# 서비스 계정(jenkins-agent, 세션 0)에서 엔진에 닿는지 `docker version`(서버 쪽까지)으로 본다. 반환 @{ Ok; Detail }:
+# 현재 사용자에서 엔진에 닿는지 `docker version`(서버 쪽까지)으로 본다. 반환 @{ Ok; Detail }:
 # Ok 면 Detail = 「서버 <판> (<os>)」, 아니면 원인을 사람 말로(파이프 권한·엔진 미기동·Windows 컨테이너 모드·docker 없음).
 function Find-Docker {
   $c = Get-Command docker.exe -ErrorAction SilentlyContinue
@@ -229,7 +229,7 @@ function Test-DockerEngine {
       return @{ Ok = $false; Detail = "Docker 엔진 파이프 권한이 없다 — $why" }
     }
     if ($err -match '(?i)cannot find the file|error during connect|daemon running|failed to connect|pipe') {
-      return @{ Ok = $false; Detail = "Docker 엔진이 꺼져 있다 — 호스트에서 Docker Desktop 이 떠 있는지(엔진이 시작됐는지) 본다. 서비스 계정은 로그인하지 않으므로 엔진은 Docker Desktop 이 이미 켜져 있어야 닿는다. (docker-users 그룹: $(if ($inGroup) { '있음' } else { '없음' }))" }
+      return @{ Ok = $false; Detail = "Docker 엔진이 꺼져 있다 — 호스트에서 Docker Desktop 이 떠 있는지(엔진이 시작됐는지) 본다. Docker Desktop 엔진이 실행 중이어야 한다. (docker-users 그룹: $(if ($inGroup) { '있음' } else { '없음' }))" }
     }
     $first = ($err -split "`r?`n" | Where-Object { $_.Trim() } | Select-Object -First 1)
     return @{ Ok = $false; Detail = "docker version 이 서버 판을 못 읽었다(stdout: '$v'): $first" }

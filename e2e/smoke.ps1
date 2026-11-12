@@ -5,7 +5,7 @@
 #          PROMPTLAB_SERVER_URL(기본 운영 https://promptlab.sandcorp.co.kr/api)
 # 기계 토큰은 「스모크」 조직의 응시자다: 배정 목록을 부르면 서버가 새 스모크 배정을 준비하고, 그 문항을 응시·제출한다.
 # 토큰 수명은 600초(refresh 없음)라 설치·Docker 준비·창 확인을 마친 뒤 응시 직전에 받는다 — 응시·채점 대기가 그 안에 끝나야 한다.
-# 종료 0 = 채점까지 끝남. 설치 파일은 모델을 받지 않는다(#131) — 응시 신고에 쓸 모델은 호스트 캐시(%LOCALAPPDATA%\promptlab\models)에 미리 둔다(Jenkinsfile: fetch-model.ps1 -All).
+# 종료 0 = 채점까지 끝남. 설치 파일은 모델을 받지 않는다(#131) — 응시 신고에 쓸 모델은 호스트 캐시(%LOCALAPPDATA%\promptlab\models)에 미리 둔다(아래 수동 스모크 절차).
 # 에이전트는 세션 0(대화형 데스크톱 없음)에서 돈다 — 화면 캡처는 하지 않고 창 확인은 MainWindowHandle 까지만 본다(#101).
 param(
   [Parameter(Mandatory)][string]$Setup,
@@ -58,7 +58,7 @@ try {
   if ($dev -match '추론 장치: GPU (.+)$') { Write-Host "GPU 추론 확인: $($Matches[1]) (세션 $([Diagnostics.Process]::GetCurrentProcess().SessionId))" }
   else { Write-Warning "GPU 장치가 보이지 않는다 — 이 세션(세션 $([Diagnostics.Process]::GetCurrentProcess().SessionId))에서는 CPU 로 추론한다. 서비스 세션 0이면 Vulkan 장치가 안 보일 수 있다(실패 아님, 사람이 호스트에서 CLI --check-gpu 로 확인)" }
 
-  Step '2c. AI 모델 크기 추천(#131) — 이 세션에서 고를 모델을 찍는다(응시 신고에 쓰는 모델과 같다, Jenkinsfile 이 후보를 모두 캐시에 둔다)'
+  Step '2c. AI 모델 크기 추천(#131) — 이 세션에서 고를 모델을 찍는다(응시 신고에 쓰는 모델과 같다, 호출자가 후보를 모두 캐시에 둔다)'
   $recLines = @(Invoke-Native { & $cli --recommend-model } | ForEach-Object { Write-Host $_; "$_" })
   if ($LASTEXITCODE -ne 0) { throw "앱의 모델 추천 실패 (종료 $LASTEXITCODE)" }
   if (-not ($recLines | Where-Object { $_ -match '\[모델\] 쓸 모델: ' })) { throw '모델 추천 출력에 「쓸 모델」 줄이 없다' }

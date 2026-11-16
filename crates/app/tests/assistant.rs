@@ -937,7 +937,7 @@ fn 모델이_보는_글에_내부_용어가_없고_한국어_답을_시킨다() 
         turn(&model, &mut chat, &host, "왜?").await.0.unwrap();
         let prompts = model_prompts(&model);
         let last = prompts.last().unwrap();
-        assert!(last.contains("[알림: 사용자가 편집 제안 1을 거절했습니다. 코드는 그대로입니다.]"));
+        assert!(last.contains("[알림: 사용자가 편집 제안 1을 거절했습니다. 코드는 그대로이고 그 제안은 적용되지 않았습니다."));
         for p in &prompts {
             assert!(!p.to_lowercase().contains("candidate"), "{p}");
             assert!(p.contains("항상 한국어로"));
@@ -1006,6 +1006,166 @@ fn 같은_차례의_되풀이_읽기는_실행하지_않는다() {
         assert_eq!(
             chat.entries().last(),
             Some(&Entry::Assistant("고칠 곳이 없습니다.".into()))
+        );
+    });
+}
+
+/// #4: 거절 뒤 같은 요청에 방금 거절된 것과 같은 제안 → 띄우지 않고 한 번 되돌린다 → 또 같으면 띄우지 않고 안내문으로
+/// 차례를 끝낸다(조용히 끝나지 않는다). 거절 알림은 같은 제안을 되풀이하지 말라고 한다.
+#[test]
+fn 거절된_제안과_같은_제안은_한_번_되돌리고_또_같으면_안내문으로_끝낸다() {
+    rt().block_on(async {
+        let fix = call(
+            "propose_edit",
+            json!({"start_line": 2, "end_line": 2, "text": "    return n + 1"}),
+        );
+        // 두 번째 차례의 같은 제안은 모델이 준 범위가 넓어도(머리 줄까지) 깎으면 같은 제안이다.
+        let same = call(
+            "propose_edit",
+            json!({"start_line": 1, "end_line": 2, "text": "def add_one(n):\n    return n + 1"}),
+        );
+        let model = LocalModel::new(Scripted::new(&[&fix, "1을 더해요.", &same, &fix, "안 보일 답"]));
+        let host = Host::new();
+        let mut chat = Chat::new();
+        turn(&model, &mut chat, &host, "버그 고쳐 줘").await.0.unwrap();
+        chat.decide(1, false, CODE).unwrap();
+        let before = chat.entries().len();
+        let (r, events) = turn(&model, &mut chat, &host, "버그 고쳐 줘").await;
+        r.unwrap();
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e, LogEvent::EditProposed { .. })),
+            "{events:?}"
+        );
+        assert!(chat.pending().is_none());
+        assert_eq!(
+            &chat.entries()[before..],
+            &[
+                Entry::User("버그 고쳐 줘".into()),
+                Entry::Tool("AI가 거절된 제안을 다시 내서 다르게 물었습니다".into()),
+                Entry::NoAlternative,
+            ]
+        );
+        let prompts = model_prompts(&model);
+        assert_eq!(prompts.len(), 4, "안내문 뒤에는 모델을 다시 부르지 않는다");
+        assert!(prompts[2].contains("사용자가 편집 제안 1을 거절했습니다"));
+        assert!(prompts[2].contains("같은 코드나 같은 설명을 되풀이하지 마세요"));
+        assert!(
+            prompts[3].contains("사용자가 방금 거절한 편집 제안 1과 같은 제안입니다"),
+            "{}",
+            prompts[3]
+        );
+        // 다음 차례는 평소대로 — 안내문이 모델 대화에 남고 되풀이 잡기는 거절 바로 뒤 차례에만 걸린다.
+        assert!(matches!(
+            chat.messages().last(),
+            Some(Message::Assistant { text, .. }) if text == promptlab_app::assistant::NO_ALTERNATIVE
+        ));
+    });
+}
+
+/// #4: 되돌린 뒤 다른 제안을 내면 평소대로 띄운다.
+#[test]
+fn 거절된_제안을_되돌린_뒤_다른_제안이면_띄운다() {
+    rt().block_on(async {
+        let fix = call(
+            "propose_edit",
+            json!({"start_line": 2, "end_line": 2, "text": "    return n + 1"}),
+        );
+        let other = call(
+            "propose_edit",
+            json!({"start_line": 2, "end_line": 2, "text": "    return 1 + n"}),
+        );
+        let model = LocalModel::new(Scripted::new(&[
+            &fix,
+            "1을 더해요.",
+            &fix,
+            &other,
+            "순서를 바꿨어요.",
+        ]));
+        let host = Host::new();
+        let mut chat = Chat::new();
+        turn(&model, &mut chat, &host, "버그 고쳐 줘")
+            .await
+            .0
+            .unwrap();
+        chat.decide(1, false, CODE).unwrap();
+        let (r, events) = turn(&model, &mut chat, &host, "버그 고쳐 줘").await;
+        r.unwrap();
+        assert_eq!(
+            events
+                .iter()
+                .filter(|e| matches!(e, LogEvent::EditProposed { .. }))
+                .count(),
+            1
+        );
+        let p = chat.pending().unwrap();
+        assert_eq!(p.id, 2);
+        assert_eq!(p.after, "def add_one(n):\n    return 1 + n\n");
+        assert!(
+            chat.entries()
+                .contains(&Entry::Assistant("순서를 바꿨어요.".into()))
+        );
+        assert!(!chat.entries().contains(&Entry::NoAlternative));
+    });
+}
+
+/// #4(실제 7B): 거절 뒤 같은 요청에 제안 없이 앞 답을 글자 그대로 되풀이 → 띄우지 않고 한 번 되돌린다 → 다른 답이면
+/// 보인다. 또 되풀이하면 안내문으로 끝낸다. 수락 뒤에는 잡지 않는다.
+#[test]
+fn 거절_뒤_앞_답을_그대로_되풀이하면_되돌리고_또_되풀이하면_안내문으로_끝낸다() {
+    rt().block_on(async {
+        let fix = call(
+            "propose_edit",
+            json!({"start_line": 2, "end_line": 2, "text": "    return n + 1"}),
+        );
+        let model = LocalModel::new(Scripted::new(&[
+            &fix,
+            "1을 더해요.",
+            "1을 더해요.",
+            "어떤 점이 마음에 들지 않았나요?",
+            &fix,
+            "1을 더해요.",
+            "1을 더해요.",
+            "1을 더해요.",
+        ]));
+        let host = Host::new();
+        let mut chat = Chat::new();
+        turn(&model, &mut chat, &host, "버그 고쳐 줘")
+            .await
+            .0
+            .unwrap();
+        chat.decide(1, false, CODE).unwrap();
+        let before = chat.entries().len();
+        turn(&model, &mut chat, &host, "버그 고쳐 줘")
+            .await
+            .0
+            .unwrap();
+        assert_eq!(
+            &chat.entries()[before..],
+            &[
+                Entry::User("버그 고쳐 줘".into()),
+                Entry::Tool("AI가 앞 답을 되풀이해 다르게 물었습니다".into()),
+                Entry::Assistant("어떤 점이 마음에 들지 않았나요?".into()),
+            ]
+        );
+        assert!(model_prompts(&model)[3].contains("방금 답은 앞 답을 그대로 되풀이해"));
+        // 다음 차례는 거절 바로 뒤가 아니라 잡지 않는다 → 새 제안·설명이 그대로 보인다(제안 2).
+        turn(&model, &mut chat, &host, "그냥 고쳐 줘")
+            .await
+            .0
+            .unwrap();
+        assert_eq!(chat.pending().unwrap().id, 2);
+        chat.decide(2, false, CODE).unwrap();
+        let before = chat.entries().len();
+        turn(&model, &mut chat, &host, "다시").await.0.unwrap();
+        assert_eq!(
+            &chat.entries()[before..],
+            &[
+                Entry::User("다시".into()),
+                Entry::Tool("AI가 앞 답을 되풀이해 다르게 물었습니다".into()),
+                Entry::NoAlternative,
+            ]
         );
     });
 }

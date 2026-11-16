@@ -11,7 +11,9 @@
 
 use dioxus::core::spawn_forever;
 use dioxus::prelude::*;
-use promptlab_app::assistant::{self, Chat, Entry, Live, ProposalState, Step, ToolHost};
+use promptlab_app::assistant::{
+    self, Chat, Entry, Live, NO_ALTERNATIVE, ProposalState, Step, ToolHost,
+};
 use promptlab_app::local::{Cancel, LocalModel};
 use promptlab_app::localrun::LocalDocker;
 use promptlab_app::workspace::{ScrollFollow, near_bottom};
@@ -478,6 +480,9 @@ fn render_entry(ui: &Ui, chat: &Chat, i: usize, entry: &Entry, busy: bool) -> El
         }
         Entry::Empty => {
             rsx! { p { key: "{i}", class: "ai-fold", "AI가 답을 만들지 못했습니다 — 질문을 조금 바꿔 다시 물어 주세요." } }
+        }
+        Entry::NoAlternative => {
+            rsx! { p { key: "{i}", class: "ai-fold", "{NO_ALTERNATIVE}" } }
         }
         Entry::Error(e) => {
             rsx! { div { key: "{i}", class: "infobar error", role: "alert", "AI 답을 만들지 못했습니다: {e}" } }

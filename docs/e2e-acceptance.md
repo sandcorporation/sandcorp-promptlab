@@ -8,7 +8,7 @@ spec #93 「받아들임」, 티켓 #101. **운영에서 코딩 문제 1개를 W
 |---|---|
 | Windows 11 PC 한 대(대화형 로그인 세션) | **RAM 16GB 이상**, 웹캠, (있으면) GPU — **사람이 로그인한 데스크톱**에서 한다 |
 | Docker Desktop(Linux 컨테이너 모드) 설치·실행 | 라이선스 안내: 개인 사용은 무료, 일정 규모 이상 기업의 업무용 사용은 유료 |
-| 설치 파일 `promptlab-app-setup-<버전>.exe` | Actions `.github/workflows/windows-build.yml`의 artifact. 서명 인증서가 없으면 SmartScreen 경고가 뜬다(「추가 정보 → 실행」) |
+| 설치 파일 `promptlab-app-setup-<버전>.exe` | GitHub Release `app-v<버전>`의 자산(`.github/workflows/app-release.yml`, 로그인 없이 받는다). 서명 인증서가 없으면 SmartScreen 경고가 뜬다(「추가 정보 → 실행」) |
 | 대표(또는 출제자) 계정으로 대시보드 로그인 | https://promptlab.sandcorp.co.kr — 시범 조직이 **승인**된 상태여야 시험을 만들 수 있다(운영자 화면 「시범 조직 승인」) |
 | 응시자용 이메일·카카오 계정 | 초대 메일을 받을 수 있는 주소(본인 다른 주소 가능) |
 | 대화 평가 키 | 서버 env `PROMPTLAB_ANTHROPIC_API_KEY`가 있어야 AI 활용 평가·리포트가 켜진다(없으면 아래 8번에서 「평가 없음」이 정상) |

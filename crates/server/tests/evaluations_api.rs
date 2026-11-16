@@ -292,7 +292,10 @@ async fn taken(e: &Env) -> Taken {
                 stopped: false,
             },
             propose(2, "    return s[:]"),
-            LogEvent::EditRejected { proposal: 2 },
+            LogEvent::EditRejected {
+                proposal: 2,
+                reason: None,
+            },
         ],
     )
     .await;

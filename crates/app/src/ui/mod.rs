@@ -475,7 +475,11 @@ impl Ui {
             }
             "decide" => {
                 if let Some(id) = message["id"].as_u64() {
-                    self.decide(id as u32, message["accept"].as_bool().unwrap_or(false));
+                    self.decide(
+                        id as u32,
+                        message["accept"].as_bool().unwrap_or(false),
+                        message["reason"].as_str(),
+                    );
                 }
             }
             "error" => error.set(Some(text("message"))),

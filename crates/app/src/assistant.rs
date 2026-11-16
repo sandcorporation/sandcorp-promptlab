@@ -43,8 +43,8 @@ use promptlab_shared::ai::{
     REPEAT_GAVE_UP_RESULT, REPEATED_READ_NOTE, REPEATED_REPLY_NOTE, StreamView, Tool, clip_result,
     compaction_cut, context_block, decision_note, enabled_tools, fabricated_result, numbered,
     parse_reply, plan_edit, proposal_bounced, proposal_repeated, proposal_shown,
-    proposal_still_open, render_message, render_message_with_context, render_with_context,
-    snap_edit, stream_view, summary_prompt, system_block, trim_edit,
+    proposal_still_open, reject_reason, render_message, render_message_with_context,
+    render_with_context, snap_edit, stream_view, summary_prompt, system_block, trim_edit,
 };
 use promptlab_shared::coding::{Language, PublicCodingProblem};
 use promptlab_shared::inference::{Inference, InferenceError, SamplingParams};
@@ -255,12 +255,20 @@ impl Chat {
     }
 
     /// 제안을 받아들이거나 버린다. 수락은 `current`(편집기의 지금 코드)가 제안을 계산한 코드와 같아야 한다.
+    /// `reason`은 거절할 때 응시자가 적은 사유(#19) — [`reject_reason`]으로 정리해 과정 로그와 다음 차례 알림에 싣고,
+    /// 비면 사유 없이 거절(#4 그대로). 수락이면 무시한다. 사유가 있어도 같은 제안 되풀이 잡기는 그대로다.
     pub fn decide(
         &mut self,
         id: u32,
         accept: bool,
+        reason: Option<&str>,
         current: &str,
     ) -> Result<Decision, DecideError> {
+        let reason = if accept {
+            None
+        } else {
+            reason.and_then(reject_reason)
+        };
         let p = self
             .proposals
             .iter_mut()
@@ -277,13 +285,17 @@ impl Chat {
         } else {
             (
                 ProposalState::Rejected,
-                LogEvent::EditRejected { proposal: id },
+                LogEvent::EditRejected {
+                    proposal: id,
+                    reason: reason.clone(),
+                },
             )
         };
         p.state = state;
         let apply = accept.then(|| (p.range, p.text.clone()));
         self.rejected = (!accept).then_some(id);
-        self.notes.push(decision_note(id, accept));
+        self.notes
+            .push(decision_note(id, accept, reason.as_deref()));
         Ok(Decision { event, apply })
     }
 

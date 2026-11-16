@@ -159,6 +159,14 @@ pub fn decision_text(p: &Proposal) -> String {
     }
 }
 
+/// 거절 사유 줄(#19 — 응시자가 적었을 때만): 「거절 이유: “…”」.
+pub fn reject_reason_text(p: &Proposal) -> Option<String> {
+    match (p.decision, &p.reject_reason) {
+        (Decision::Rejected, Some(r)) => Some(format!("거절 이유: “{r}”")),
+        _ => None,
+    }
+}
+
 /// 범위 표기(「3:1–5:12」).
 pub fn range_text(p: &Proposal) -> String {
     format!(
@@ -207,6 +215,7 @@ mod tests {
             text: "x".into(),
             decision: Decision::Accepted,
             decided_seq: Some(seq + 1),
+            reject_reason: None,
             after_accept: after,
         }
     }
@@ -271,5 +280,20 @@ mod tests {
         let mut rejected = proposal(2, 2, None);
         rejected.decision = Decision::Rejected;
         assert_eq!(decision_text(&rejected), "거절");
+        assert_eq!(reject_reason_text(&rejected), None);
+    }
+
+    #[test]
+    fn reject_reason_shows_only_for_rejected() {
+        let mut rejected = proposal(2, 2, None);
+        rejected.decision = Decision::Rejected;
+        rejected.reject_reason = Some("정렬로 풀고 싶어".into());
+        assert_eq!(
+            reject_reason_text(&rejected).as_deref(),
+            Some("거절 이유: “정렬로 풀고 싶어”")
+        );
+        let mut accepted = proposal(3, 3, None);
+        accepted.reject_reason = Some("x".into());
+        assert_eq!(reject_reason_text(&accepted), None);
     }
 }

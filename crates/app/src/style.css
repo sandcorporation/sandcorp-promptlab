@@ -331,5 +331,6 @@ select option { color: var(--text); background: var(--bg-card); }
 .diff-overlay { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; background: var(--bg-card); }
 .diff-head { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--stroke-card); background: var(--bg-mica); }
 .diff-head > .grow { flex: 1; }
+.diff-head > input.reject-reason { width: 240px; min-width: 120px; flex: 0 1 240px; height: 32px; }
 .diff-body { flex: 1; min-height: 0; }
 .model-pick select { max-width: 300px; height: 32px; padding-left: 10px; cursor: pointer; }

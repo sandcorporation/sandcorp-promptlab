@@ -210,8 +210,18 @@ fn 판_2_사건은_종류마다_원문_형식으로_왕복한다() {
             r#"{"type":"edit_accepted","proposal":1}"#,
         ),
         (
-            LogEvent::EditRejected { proposal: 2 },
+            LogEvent::EditRejected {
+                proposal: 2,
+                reason: None,
+            },
             r#"{"type":"edit_rejected","proposal":2}"#,
+        ),
+        (
+            LogEvent::EditRejected {
+                proposal: 3,
+                reason: Some("정렬로 풀고 싶어".into()),
+            },
+            r#"{"type":"edit_rejected","proposal":3,"reason":"정렬로 풀고 싶어"}"#,
         ),
         (
             LogEvent::LocalRun {

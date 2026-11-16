@@ -1519,6 +1519,68 @@ async fn 허용_밖_ai_모델은_새_문항_시작만_막고_속도는_결과에
     let (status, csv) = csv_of(&e, &org, &exam).await;
     assert_eq!(status, StatusCode::OK);
     assert!(csv.contains(",5.0,CPU,"), "{csv}");
+
+    // 문항 1: 말이 안 되는 신고값(#26 — 주소 같은 토큰 수를 1ms로 나눈 속도, 전체보다 많은 GPU 층)은 저장하지 않는다.
+    // 제출은 받고, 결과·응시자 상세·CSV에는 신고 없음으로 나온다.
+    let bogus = AiSpeed {
+        generated_tokens: 70_190_099_686_700,
+        generate_ms: 1,
+        gpu_layers: 99,
+        total_layers: 29,
+    };
+    let item1 = format!("{base}/1");
+    let seq = upload_events(
+        &e.app,
+        &item1,
+        &token_for(ERIN),
+        vec![LogEvent::Submitted {
+            language: Language::Python,
+            code_sha256: code_sha256(CODE),
+            ai_speed: Some(bogus),
+        }],
+    )
+    .await;
+    let (status, body) = call(
+        &e.app,
+        "POST",
+        &format!("{item1}/submit"),
+        Some(&token_for(ERIN)),
+        Some(json!({"language": "python", "code": CODE, "log_seq": seq})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::ACCEPTED, "제출은 막지 않는다: {body}");
+    let results: ExamResults = ok(
+        &e.app,
+        "GET",
+        &format!("/orgs/{}/exams/{}/results", org.id, exam.id),
+        CAROL,
+        None,
+        StatusCode::OK,
+    )
+    .await;
+    let items = &results.rows[0].items;
+    assert_eq!(items[0].ai_speed, Some(speed));
+    assert_eq!(
+        items[1].ai_speed, None,
+        "말이 안 되는 신고값은 저장하지 않는다"
+    );
+    let activity: ItemActivity = ok(
+        &e.app,
+        "GET",
+        &format!(
+            "/orgs/{}/exams/{}/invites/{}/items/1/activity",
+            org.id, exam.id, assignment.id
+        ),
+        CAROL,
+        None,
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(activity.ai_speed, None);
+    let (status, csv) = csv_of(&e, &org, &exam).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!csv.contains("70190099686700"), "{csv}");
+    assert!(!csv.contains("GPU 99/29"), "{csv}");
 }
 
 /// 결과 CSV 본문(감독관).

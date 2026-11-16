@@ -34,6 +34,7 @@ pub mod practice;
 pub mod publication;
 pub mod report;
 pub mod retention;
+pub mod sanity;
 pub mod syntax;
 pub mod terms;
 pub mod webcam;

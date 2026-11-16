@@ -501,12 +501,9 @@ async fn bench_matrix(path: &std::path::Path) -> Result<bool, String> {
 fn model_pick() -> promptlab_app::model_pick::ModelPick {
     use promptlab_app::model_pick::{MODEL_PREFS_FILE, ModelPick, ModelPrefs};
     ModelPick {
-        machine: promptlab_inference::machine().unwrap_or(
-            promptlab_shared::model_choice::Machine {
-                gpu: None,
-                free_ram: 0,
-            },
-        ),
+        machine: promptlab_inference::machine().unwrap_or_else(|_| {
+            promptlab_shared::model_choice::Machine::measured(None, None, None)
+        }),
         downloaded: promptlab_inference::downloaded_models(),
         prefs: ModelPrefs::load(&proclog::data_dir().join(MODEL_PREFS_FILE)),
         allowed: None,

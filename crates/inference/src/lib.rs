@@ -32,7 +32,8 @@ use promptlab_shared::inference::{
     ModelPin, RuntimeConfig, SPILL_TOKENS_PER_SEC, SamplingParams, best_probe, choose_runtime,
     next_probe, usable_gpu_memory,
 };
-use promptlab_shared::model_choice::{GpuMemory, Machine};
+use promptlab_shared::model_choice::Machine;
+use promptlab_shared::sanity;
 use sha2::{Digest, Sha256};
 
 /// 모델 캐시 디렉터리: `PROMPTLAB_MODEL_DIR` → `$XDG_CACHE_HOME/promptlab/models` → (Windows) `%LOCALAPPDATA%\promptlab\models`
@@ -164,9 +165,9 @@ fn load_dynamic_backends() {}
 /// 이 PC에서 추론이 쓸 장치(응시 전 점검의 「AI 속도」 행).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComputeInfo {
-    /// 레이어를 올릴 GPU 이름(Vulkan 장치 설명). 없으면 CPU로 돈다.
+    /// 레이어를 올릴 GPU 이름(Vulkan 장치 설명 — 말이 안 되는 이름이면 「이름 측정 실패」, #26). 없으면 CPU로 돈다.
     pub gpu: Option<String>,
-    /// 시스템 메모리 합(바이트, CPU 장치가 알려 준 값). 모르면 `None`.
+    /// 시스템 메모리 합(바이트, CPU 장치가 알려 준 값). 모르거나 범위 밖이면 `None`.
     pub ram_bytes: Option<u64>,
 }
 
@@ -174,27 +175,26 @@ pub struct ComputeInfo {
 pub fn compute_info() -> Result<ComputeInfo, InferenceError> {
     backend()?;
     let devices = list_llama_ggml_backend_devices();
-    let gpu = devices
-        .iter()
-        .find(|d| {
-            matches!(
-                d.device_type,
-                LlamaBackendDeviceType::Gpu | LlamaBackendDeviceType::IntegratedGpu
-            )
-        })
-        .map(|d| {
-            if d.description.is_empty() {
-                d.name.clone()
-            } else {
-                d.description.clone()
-            }
-        });
+    // 화면에 낼 값이라 범위를 검증한다(#26 — FFI 너머 값이 주소처럼 생긴 거대값으로 보인 적이 있다). 원래 값은
+    // `promptlab-app-cli --check-gpu`([`devices`])가 그대로 찍는다.
+    let gpu = devices.iter().find(|d| is_gpu(d.device_type)).map(|d| {
+        sanity::device_name(&d.description)
+            .or_else(|| sanity::device_name(&d.name))
+            .unwrap_or_else(|| format!("이름 {}", sanity::MEASURE_FAILED))
+    });
     let ram_bytes = devices
         .iter()
         .find(|d| d.device_type == LlamaBackendDeviceType::Cpu)
-        .map(|d| d.memory_total as u64)
-        .filter(|&b| b > 0);
+        .and_then(|d| sanity::ram_bytes(d.memory_total as u64));
     Ok(ComputeInfo { gpu, ram_bytes })
+}
+
+/// 레이어를 올릴 수 있는 GPU(외장·내장) 장치 종류인가.
+fn is_gpu(kind: LlamaBackendDeviceType) -> bool {
+    matches!(
+        kind,
+        LlamaBackendDeviceType::Gpu | LlamaBackendDeviceType::IntegratedGpu
+    )
 }
 
 /// 이 바이너리에 GPU(Vulkan) 백엔드 모듈이 구워졌나(기능 `vulkan`). 아니면 CPU만 쓰는 빌드다.
@@ -221,10 +221,7 @@ pub fn devices() -> Result<Vec<DeviceInfo>, InferenceError> {
     Ok(list_llama_ggml_backend_devices()
         .into_iter()
         .map(|d| DeviceInfo {
-            gpu: matches!(
-                d.device_type,
-                LlamaBackendDeviceType::Gpu | LlamaBackendDeviceType::IntegratedGpu
-            ),
+            gpu: is_gpu(d.device_type),
             backend: d.backend,
             name: d.name,
             description: d.description,
@@ -233,42 +230,31 @@ pub fn devices() -> Result<Vec<DeviceInfo>, InferenceError> {
         .collect())
 }
 
-/// 레이어를 올릴 GPU의 (여유, 전체) 메모리 바이트(#116 — 진단·[`choose_runtime`]). GPU가 없거나 모르면 `None`.
+/// 레이어를 올릴 GPU의 (여유, 전체) 메모리 바이트(#116 — 진단·[`choose_runtime`]). GPU가 없거나 모르거나 범위 밖이면(#26) `None`.
 pub fn gpu_memory() -> Result<Option<(u64, u64)>, InferenceError> {
     backend()?;
     Ok(list_llama_ggml_backend_devices()
         .into_iter()
-        .find(|d| {
-            matches!(
-                d.device_type,
-                LlamaBackendDeviceType::Gpu | LlamaBackendDeviceType::IntegratedGpu
-            )
-        })
-        .map(|d| (d.memory_free as u64, d.memory_total as u64))
-        .filter(|&(_, total)| total > 0))
+        .find(|d| is_gpu(d.device_type))
+        .and_then(|d| sanity::gpu_memory(d.memory_free as u64, d.memory_total as u64)))
 }
 
 /// 모델 크기 추천의 입력(#131 — [`promptlab_shared::model_choice::recommend`]): GPU의 전체·쓸 수 있는 메모리
 /// (올릴 때 [`choose_runtime`]이 쓰는 값과 같다 — llama.cpp 여유와 OS가 센 사용량 중 작은 쪽)와 여유 RAM.
 pub fn machine() -> Result<Machine, InferenceError> {
     backend()?;
-    let memory = if compute_info()?.gpu.is_some() {
-        gpu_memory()?
-    } else {
-        None
-    };
+    let devices = list_llama_ggml_backend_devices();
+    // GPU가 보이면 그 메모리를 (말이 되든 안 되든) 넘긴다 — 범위 검증·「측정 실패」는 `Machine::measured`(#26).
+    let memory = devices
+        .iter()
+        .find(|d| is_gpu(d.device_type))
+        .map(|d| (d.memory_free as u64, d.memory_total as u64));
     let os_used = memory.and(os_gpu::dedicated_usage_bytes());
-    let free_ram = list_llama_ggml_backend_devices()
-        .into_iter()
+    let free_ram = devices
+        .iter()
         .find(|d| d.device_type == LlamaBackendDeviceType::Cpu)
-        .map_or(0, |d| d.memory_free as u64);
-    Ok(Machine {
-        gpu: memory.map(|(free, total)| GpuMemory {
-            total,
-            usable: usable_gpu_memory(free, total, os_used),
-        }),
-        free_ram,
-    })
+        .map(|d| d.memory_free as u64);
+    Ok(Machine::measured(memory, os_used, free_ram))
 }
 
 fn vram_mib() -> Option<(u64, u64)> {

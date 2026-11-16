@@ -24,7 +24,7 @@ use promptlab_shared::exam::{
 };
 
 use promptlab_shared::coding::PublicCodingProblem;
-use promptlab_shared::log::{LogEvent, code_sha256};
+use promptlab_shared::log::{AiSpeed, LogEvent, code_sha256};
 use promptlab_store::exams::{self, Assignment, Exam, InviteIssue, NewExam};
 use promptlab_store::{accounts, bank, problems, smoke, submissions};
 use uuid::Uuid;
@@ -599,7 +599,8 @@ pub async fn submit_item(
         Err(e) => return Err(e.into()),
     };
     // AI 속도·GPU(#5): 서명된 제출 사건의 신고값을 문항 시작 줄에 남긴다(결과·CSV·응시자 상세가 읽는다).
-    if let Some(speed) = ai_speed {
+    // 말이 안 되는 신고값(#26 — 범위 밖 속도·층 수)은 저장하지 않고 신고 없음으로 다룬다. 제출은 받는다.
+    if let Some(speed) = ai_speed.filter(AiSpeed::is_plausible) {
         exams::set_ai_speed(&state.pool, assignment.id, position, &speed).await?;
     }
     tracing::info!(id = %view.id, invite_id = %assignment.id, position, "시험 문항 제출·큐에 넣음");

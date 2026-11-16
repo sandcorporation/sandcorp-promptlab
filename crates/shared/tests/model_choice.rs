@@ -15,6 +15,7 @@ fn gpu(total: u64, usable: u64, free_ram: u64) -> Machine {
     Machine {
         gpu: Some(GpuMemory { total, usable }),
         free_ram,
+        unmeasured: Default::default(),
     }
 }
 
@@ -22,6 +23,7 @@ fn cpu(free_ram: u64) -> Machine {
     Machine {
         gpu: None,
         free_ram,
+        unmeasured: Default::default(),
     }
 }
 

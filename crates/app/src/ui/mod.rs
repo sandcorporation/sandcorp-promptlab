@@ -79,10 +79,8 @@ pub enum FetchState {
 /// 이 PC의 사양·받아 둔 모델·설정 파일을 읽는다(백엔드를 올리고 장치를 본다 — 모델은 올리지 않는다).
 pub fn detect_model_pick() -> ModelPick {
     ModelPick {
-        machine: promptlab_inference::machine().unwrap_or(Machine {
-            gpu: None,
-            free_ram: 0,
-        }),
+        machine: promptlab_inference::machine()
+            .unwrap_or_else(|_| Machine::measured(None, None, None)),
         downloaded: promptlab_inference::downloaded_models(),
         prefs: ModelPrefs::load(&model_prefs_path()),
         allowed: None,

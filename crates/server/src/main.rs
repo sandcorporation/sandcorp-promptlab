@@ -187,6 +187,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         live: promptlab_server::live::Live::new(turn),
         reports: reports.clone(),
         webhook_secrets,
+        download: promptlab_server::download::Download::from_env(),
     };
     if let Some(model) = reports {
         tokio::spawn(promptlab_server::reports::report_loop(state.clone(), model));

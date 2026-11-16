@@ -163,6 +163,7 @@ pub fn exam_invite(
     link: &str,
     expires_days: i64,
     models_note: Option<&str>,
+    download_url: &str,
 ) -> Mail {
     let models = models_note.map(|n| format!("{n}\n\n")).unwrap_or_default();
     Mail {
@@ -171,7 +172,8 @@ pub fn exam_invite(
         body: format!(
             "{org_name}에서 promptlab 시험 「{exam_title}」에 초대했습니다.\n\n\
              1. 아래 링크를 열고 카카오로 로그인하면 시험이 배정됩니다.\n   {link}\n\
-             2. promptlab 응시 앱을 열어 같은 카카오 계정으로 로그인하면 배정된 시험이 보입니다.\n\n\
+             2. 응시 앱이 없으면 아래 주소에서 설치 파일을 받아 설치합니다(Windows).\n   {download_url}\n\
+             3. promptlab 응시 앱을 열어 같은 카카오 계정으로 로그인하면 배정된 시험이 보입니다.\n\n\
              {models}링크는 {expires_days}일 동안 쓸 수 있고, 처음 들어온 한 사람에게만 배정됩니다. 다른 사람에게 전달하지 마세요.\n"
         ),
     }
@@ -191,8 +193,10 @@ mod tests {
             "https://x/exam-invite/t",
             7,
             promptlab_shared::exam::required_models_note(&all).as_deref(),
+            "https://x/download",
         );
         assert!(!mail.body.contains("모델"), "{}", mail.body);
+        assert!(mail.body.contains("https://x/download"), "{}", mail.body);
         let only = vec!["7b".to_owned()];
         let mail = exam_invite(
             "a@example.com",
@@ -201,6 +205,7 @@ mod tests {
             "https://x/exam-invite/t",
             7,
             promptlab_shared::exam::required_models_note(&only).as_deref(),
+            "https://x/download",
         );
         assert!(
             mail.body.contains("Qwen2.5-Coder 7B 모델만 쓸 수 있습니다"),

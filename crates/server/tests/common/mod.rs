@@ -332,6 +332,7 @@ pub fn app_with(pool: PgPool, token_endpoint: Arc<FakeTokenEndpoint>) -> axum::R
         live: promptlab_server::live::Live::disabled(),
         reports: None,
         webhook_secrets: Default::default(),
+        download: promptlab_server::download::Download::new("http://127.0.0.1:9", "o/r", std::time::Duration::from_secs(600)),
     })
 }
 
@@ -352,6 +353,7 @@ pub fn app_parts(
         live: promptlab_server::live::Live::disabled(),
         reports: None,
         webhook_secrets: Default::default(),
+        download: promptlab_server::download::Download::new("http://127.0.0.1:9", "o/r", std::time::Duration::from_secs(600)),
     })
 }
 
@@ -371,6 +373,7 @@ pub fn app_live(
         live: promptlab_server::live::Live::new(turn),
         reports: None,
         webhook_secrets: Default::default(),
+        download: promptlab_server::download::Download::new("http://127.0.0.1:9", "o/r", std::time::Duration::from_secs(600)),
     })
 }
 
@@ -390,6 +393,7 @@ pub fn app_state(
         live: promptlab_server::live::Live::disabled(),
         reports,
         webhook_secrets: Default::default(),
+        download: promptlab_server::download::Download::new("http://127.0.0.1:9", "o/r", std::time::Duration::from_secs(600)),
     }
 }
 

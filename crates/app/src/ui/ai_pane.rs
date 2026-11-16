@@ -207,8 +207,8 @@ impl Ui {
         }));
     }
 
-    /// 제안을 받아들이거나 버린다(편집기 diff의 단추·AI 칸의 단추).
-    pub fn decide(&self, id: u32, accept: bool) {
+    /// 제안을 받아들이거나 버린다(편집기 diff의 단추·AI 칸의 단추). `reason` = 편집기 diff 덮개의 거절 사유 칸(#19).
+    pub fn decide(&self, id: u32, accept: bool, reason: Option<&str>) {
         let (mut toast, mut error) = (self.toast, self.error);
         if (self.ai_busy)() {
             toast.set(Some(
@@ -227,7 +227,7 @@ impl Ui {
         let decided = chats
             .write()
             .get_mut(&key)
-            .map(|c| c.decide(id, accept, &current));
+            .map(|c| c.decide(id, accept, reason, &current));
         match decided {
             Some(Ok(d)) => {
                 note(self.plog, d.event);
@@ -511,8 +511,8 @@ fn render_entry(ui: &Ui, chat: &Chat, i: usize, entry: &Entry, busy: bool) -> El
                     if p.state == ProposalState::Pending {
                         div { class: "row-line",
                             button { onclick: move |_| u1.show_diff(id), "diff 보기" }
-                            button { class: "accent", disabled: busy, onclick: move |_| u2.decide(id, true), "수락" }
-                            button { disabled: busy, onclick: move |_| u3.decide(id, false), "거절" }
+                            button { class: "accent", disabled: busy, onclick: move |_| u2.decide(id, true, None), "수락" }
+                            button { disabled: busy, onclick: move |_| u3.decide(id, false, None), "거절" }
                         }
                     }
                 }

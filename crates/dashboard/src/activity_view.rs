@@ -5,7 +5,9 @@ use dioxus::prelude::*;
 use promptlab_shared::activity::{Activity, Run, Turn};
 use promptlab_shared::api::{ItemActivity, ProcessLogView};
 
-use crate::timeline::{DiffKind, Step, decision_text, edit_timeline, range_text};
+use crate::timeline::{
+    DiffKind, Step, decision_text, edit_timeline, range_text, reject_reason_text,
+};
 use crate::{api, notice};
 
 /// 문항 하나의 코드·타임라인·대화. `picked`는 근거 칩이 눌러 둔 앵커(그 요소를 강조한다).
@@ -182,6 +184,9 @@ fn step_row(step: Step, origin: i64, picked: Signal<Option<String>>) -> Element 
                         if let Some(turn) = p.turn {
                             span { class: "muted small", "턴 {turn}에서" }
                         }
+                    }
+                    if let Some(reason) = reject_reason_text(&p) {
+                        p { class: "small reject-reason", "{reason}" }
                     }
                     details {
                         summary { class: "muted small", "줄 {range_text(&p)}에 넣을 글 {p.text.chars().count()}자" }

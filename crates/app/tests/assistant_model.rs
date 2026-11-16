@@ -138,7 +138,7 @@ fn 실제_모델이_문제와_코드를_읽고_편집을_제안하면_수락된�
             "{}",
             p.after
         );
-        let d = chat.decide(p.id, true, CODE).unwrap();
+        let d = chat.decide(p.id, true, None, CODE).unwrap();
         let (range, text) = d.apply.unwrap();
         assert_eq!(apply_range(CODE, &range, &text).unwrap(), p.after);
         assert!(chat.entries().contains(&Entry::Proposal(p.id)));
@@ -326,7 +326,7 @@ fn 실제_모델의_js_버그_수정_제안은_함수_머리를_지키고_한국
         report_syntax(&p.after);
         let shown: Vec<&String> = replies.iter().filter(|t| !t.trim().is_empty()).collect();
         eprintln!("보인 답 {shown:?}");
-        let d = chat.decide(p.id, true, JS_CODE).unwrap();
+        let d = chat.decide(p.id, true, None, JS_CODE).unwrap();
         let (range, text) = d.apply.unwrap();
         *host.0.borrow_mut() = apply_range(JS_CODE, &range, &text).unwrap();
         let mut after = Vec::new();
@@ -568,7 +568,7 @@ fn 실제_모델은_조용히_끝나거나_특수_토큰을_보이지_않는다(
         ] {
             if let Some(id) = chat.pending().map(|p| p.id) {
                 let code = host.0.borrow().clone();
-                chat.decide(id, false, &code).unwrap();
+                chat.decide(id, false, None, &code).unwrap();
             }
             let before = chat.entries().len();
             let mut replies = Vec::new();
@@ -644,7 +644,7 @@ fn 실제_모델은_거절된_제안을_같은_요청에_되풀이하지_않는�
             .unwrap();
         let first = chat.pending().expect("첫 편집 제안").clone();
         eprintln!("제안 #{} {:?}\n{}", first.id, first.lines, first.text);
-        chat.decide(first.id, false, JS_CODE).unwrap();
+        chat.decide(first.id, false, None, JS_CODE).unwrap();
         let before = chat.entries().len();
         ask(&model, &mut chat, &host, question, &Cancel::new(), &mut log)
             .await
@@ -682,6 +682,82 @@ fn 실제_모델은_거절된_제안을_같은_요청에_되풀이하지_않는�
                 });
                 assert!(answered, "제안도 새 한국어 답도 없다 {entries:?}");
             }
+        }
+    });
+}
+
+/// #19: #4와 같은 JS 「버그 고쳐 줘」 → 제안 **거절** → 같은 요청을, 사유 없이 거절한 대화와 사유(「이중 반복문 말고 Map으로
+/// 한 번만 돌게 풀고 싶어」)를 적고 거절한 대화로 나란히 돌려 두 번째 답(요지·제안 유무·걸린 시간)을 찍는다. 사유가 있으면
+/// 거절된 것과 다른 제안이나 새 한국어 답이어야 한다(되풀이 안내문으로 끝나지 않는다).
+#[test]
+#[ignore = "모델 파일이 필요하다 — scripts/fetch-model.sh 뒤 --ignored 로 켠다"]
+fn 실제_모델은_거절_사유를_반영해_다른_제안이나_답을_낸다() {
+    const REASON: &str = "이중 반복문 말고 Map으로 한 번만 돌게 풀고 싶어";
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap();
+    rt.block_on(async {
+        let model = LocalModel::<LlamaInference>::load(default_model_path())
+            .await
+            .unwrap();
+        let host = JsHost(
+            std::cell::RefCell::new(JS_CODE.to_owned()),
+            Language::Javascript,
+        );
+        let question = "예제 [3, 3], 6에서 [0, 0]이 나와. 버그 고쳐 줘";
+        let t0 = Instant::now();
+        let mut log = |s: Step<'_>| {
+            if let Step::Event(LogEvent::AiReply {
+                text, tool_calls, ..
+            }) = s
+            {
+                eprintln!("[{:.1?}] 답 {text:?} 호출 {tool_calls:?}", t0.elapsed());
+            }
+        };
+        let mut first_chat = Chat::new();
+        ask(
+            &model,
+            &mut first_chat,
+            &host,
+            question,
+            &Cancel::new(),
+            &mut log,
+        )
+        .await
+        .unwrap();
+        let first = first_chat.pending().expect("첫 편집 제안").clone();
+        eprintln!("첫 제안 #{} {:?}\n{}", first.id, first.lines, first.text);
+
+        let mut outcome = Vec::new();
+        for reason in [None, Some(REASON)] {
+            let mut chat = first_chat.clone();
+            chat.decide(first.id, false, reason, JS_CODE).unwrap();
+            let before = chat.entries().len();
+            let t = Instant::now();
+            ask(&model, &mut chat, &host, question, &Cancel::new(), &mut log)
+                .await
+                .unwrap();
+            let took = t.elapsed();
+            eprintln!("=== 사유 {reason:?} — 두 번째 차례 {took:.1?}");
+            let entries: Vec<Entry> = chat.entries()[before..].to_vec();
+            for e in &entries {
+                eprintln!("  {e:?}");
+            }
+            let second = chat.pending().cloned();
+            if let Some(p) = &second {
+                eprintln!("  두 번째 제안 #{} {:?}\n{}", p.id, p.lines, p.text);
+            }
+            let earlier: Vec<Entry> = chat.entries()[..before].to_vec();
+            outcome.push((reason, entries, second, earlier, took));
+        }
+        let (_, entries, second, earlier, _) = outcome.pop().unwrap();
+        match second {
+            Some(p) => assert_ne!(p.after, first.after, "거절된 제안을 그대로 다시 띄웠다"),
+            None => assert!(
+                entries.iter().any(|e| matches!(e, Entry::Assistant(t)
+                    if has_hangul(t) && !earlier.contains(e))),
+                "사유가 있는데 제안도 새 한국어 답도 없다 {entries:?}"
+            ),
         }
     });
 }

@@ -78,8 +78,12 @@ pub enum LogEvent {
     },
     /// 제안을 받아들였다.
     EditAccepted { proposal: u32 },
-    /// 제안을 버렸다.
-    EditRejected { proposal: u32 },
+    /// 제안을 버렸다. `reason` = 응시자가 적은 거절 사유(#19, 선택 — 앱이 `ai::reject_reason`으로 정리해 넣는다).
+    EditRejected {
+        proposal: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+    },
     /// 로컬 실행(직접 실행 또는 예제 실행). 예제 실행이면 통과 수.
     LocalRun {
         kind: LocalRunKind,

@@ -130,8 +130,18 @@ fn event_row(e: ReplayEvent, origin_ms: i64) -> Element {
                 }
             }
         }
-        LogEvent::EditAccepted { proposal } | LogEvent::EditRejected { proposal } => {
+        LogEvent::EditAccepted { proposal }
+        | LogEvent::EditRejected {
+            proposal,
+            reason: None,
+        } => {
             rsx! { div { class: "muted small", "제안 {proposal}" } }
+        }
+        LogEvent::EditRejected {
+            proposal,
+            reason: Some(reason),
+        } => {
+            rsx! { div { class: "muted small", "제안 {proposal} · 이유: “{reason}”" } }
         }
         LogEvent::LocalRun {
             kind,

@@ -163,12 +163,29 @@ const showDiff = (m) => {
   const lines = document.createElement("span");
   lines.className = "sub grow";
   lines.textContent = m.lines || "";
+  // 거절 사유(#19, 선택·최대 300자): 「거절」 옆 한 줄. 비우고 거절하면 사유 없이. 입력칸이라 시험이면 위의 클립보드
+  // 가드(문서 capture 리스너)를 그대로 받는다 — 붙여넣기 대상이 되게 id를 둔다. Enter = 이 사유로 거절.
+  const reason = document.createElement("input");
+  reason.type = "text";
+  reason.id = "pl-reject-reason";
+  reason.className = "reject-reason";
+  reason.maxLength = 300;
+  reason.placeholder = "거절 이유(선택) — 예: 정렬로 풀고 싶어";
+  reason.setAttribute("aria-label", "거절 이유(선택, 300자까지)");
+  const decide = (accept) =>
+    send({ t: "decide", id: m.id, accept, reason: accept ? null : reason.value.trim() || null });
+  reason.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.isComposing) {
+      e.preventDefault();
+      decide(false);
+    }
+  });
   const button = (label, accent, accept) => {
     const b = document.createElement("button");
     b.type = "button";
     b.textContent = label;
     if (accent) b.className = "accent";
-    b.addEventListener("click", () => send({ t: "decide", id: m.id, accept }));
+    b.addEventListener("click", () => decide(accept));
     return b;
   };
   const hide = document.createElement("button");
@@ -177,7 +194,7 @@ const showDiff = (m) => {
   hide.textContent = "닫기";
   hide.title = "제안은 AI 칸에 남습니다";
   hide.addEventListener("click", closeDiff);
-  head.append(title, lines, button("수락", true, true), button("거절", false, false), hide);
+  head.append(title, lines, button("수락", true, true), reason, button("거절", false, false), hide);
   const body = document.createElement("div");
   body.className = "diff-body";
   el.append(head, body);

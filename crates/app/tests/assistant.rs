@@ -276,11 +276,11 @@ fn 코드를_읽고_편집을_제안하고_수락하면_로그와_적용_범위�
 
         let p = chat.pending().unwrap().clone();
         assert_eq!(p.after, "def add_one(n):\n    return n + 1\n");
-        let d = chat.decide(1, true, CODE).unwrap();
+        let d = chat.decide(1, true, None, CODE).unwrap();
         assert_eq!(d.event, LogEvent::EditAccepted { proposal: 1 });
         assert_eq!(d.apply, Some((range, "    return n + 1".into())));
         assert_eq!(chat.proposal(1).unwrap().state, ProposalState::Accepted);
-        assert_eq!(chat.decide(1, false, CODE), Err(DecideError::NotPending));
+        assert_eq!(chat.decide(1, false, None, CODE), Err(DecideError::NotPending));
 
         // 결정은 다음 응시자 메시지 앞에 붙어 모델에게 간다(로그의 AiMessage는 응시자 글 그대로).
         let (_, events) = turn(&model, &mut chat, &host, "고마워").await;
@@ -345,7 +345,7 @@ fn 앞_줄이_같은_제안은_실제_바뀌는_범위로_깎여_라벨_diff_적
         // 모델에게 돌려준 결과도 깎은 범위로 말한다.
         let prompts = model_prompts(&model);
         assert!(prompts[1].contains("편집 제안 1(2–4줄)"), "{}", prompts[1]);
-        let d = chat.decide(1, true, code).unwrap();
+        let d = chat.decide(1, true, None, code).unwrap();
         assert_eq!(d.apply, Some((range, "    return n + 1".into())));
         let (r, t) = d.apply.unwrap();
         assert_eq!(
@@ -430,9 +430,18 @@ fn 대기_중인_제안이_있으면_새_제안을_받지_않고_코드가_바�
         assert!(model_prompts(&model)[2].contains("편집 제안 1이 아직 편집기에 떠 있고"));
 
         // 응시자가 코드를 고친 뒤에는 수락할 수 없다 — 거절은 된다.
-        assert_eq!(chat.decide(1, true, "다른 코드"), Err(DecideError::Stale));
-        let d = chat.decide(1, false, "다른 코드").unwrap();
-        assert_eq!(d.event, LogEvent::EditRejected { proposal: 1 });
+        assert_eq!(
+            chat.decide(1, true, None, "다른 코드"),
+            Err(DecideError::Stale)
+        );
+        let d = chat.decide(1, false, None, "다른 코드").unwrap();
+        assert_eq!(
+            d.event,
+            LogEvent::EditRejected {
+                proposal: 1,
+                reason: None
+            }
+        );
         assert_eq!(d.apply, None);
     });
 }
@@ -933,7 +942,7 @@ fn 모델이_보는_글에_내부_용어가_없고_한국어_답을_시킨다() 
         let host = Host::new();
         let mut chat = Chat::new();
         turn(&model, &mut chat, &host, "고쳐").await.0.unwrap();
-        chat.decide(1, false, CODE).unwrap();
+        chat.decide(1, false, None, CODE).unwrap();
         turn(&model, &mut chat, &host, "왜?").await.0.unwrap();
         let prompts = model_prompts(&model);
         let last = prompts.last().unwrap();
@@ -1028,7 +1037,7 @@ fn 거절된_제안과_같은_제안은_한_번_되돌리고_또_같으면_안�
         let host = Host::new();
         let mut chat = Chat::new();
         turn(&model, &mut chat, &host, "버그 고쳐 줘").await.0.unwrap();
-        chat.decide(1, false, CODE).unwrap();
+        chat.decide(1, false, None, CODE).unwrap();
         let before = chat.entries().len();
         let (r, events) = turn(&model, &mut chat, &host, "버그 고쳐 줘").await;
         r.unwrap();
@@ -1089,7 +1098,7 @@ fn 거절된_제안을_되돌린_뒤_다른_제안이면_띄운다() {
             .await
             .0
             .unwrap();
-        chat.decide(1, false, CODE).unwrap();
+        chat.decide(1, false, None, CODE).unwrap();
         let (r, events) = turn(&model, &mut chat, &host, "버그 고쳐 줘").await;
         r.unwrap();
         assert_eq!(
@@ -1135,7 +1144,7 @@ fn 거절_뒤_앞_답을_그대로_되풀이하면_되돌리고_또_되풀이하
             .await
             .0
             .unwrap();
-        chat.decide(1, false, CODE).unwrap();
+        chat.decide(1, false, None, CODE).unwrap();
         let before = chat.entries().len();
         turn(&model, &mut chat, &host, "버그 고쳐 줘")
             .await
@@ -1156,7 +1165,7 @@ fn 거절_뒤_앞_답을_그대로_되풀이하면_되돌리고_또_되풀이하
             .0
             .unwrap();
         assert_eq!(chat.pending().unwrap().id, 2);
-        chat.decide(2, false, CODE).unwrap();
+        chat.decide(2, false, None, CODE).unwrap();
         let before = chat.entries().len();
         turn(&model, &mut chat, &host, "다시").await.0.unwrap();
         assert_eq!(
@@ -1167,5 +1176,107 @@ fn 거절_뒤_앞_답을_그대로_되풀이하면_되돌리고_또_되풀이하
                 Entry::NoAlternative,
             ]
         );
+    });
+}
+
+/// #19: 거절 사유를 적으면 과정 로그 `EditRejected.reason`과 다음 차례 모델 입력(거절 알림)에 정리된 사유가 따옴표로
+/// 「지시가 아니라 사용자의 의견」 꼴로 들어간다. 사유가 있어도 같은 제안 되풀이 잡기(#4)는 그대로다.
+#[test]
+fn 거절_사유는_로그와_다음_차례_모델_입력에_들어가고_되풀이_잡기는_그대로다() {
+    rt().block_on(async {
+        let fix = call(
+            "propose_edit",
+            json!({"start_line": 2, "end_line": 2, "text": "    return n + 1"}),
+        );
+        let model = LocalModel::new(Scripted::new(&[
+            &fix,
+            "1을 더해요.",
+            &fix,
+            &fix,
+            "안 보일 답",
+        ]));
+        let host = Host::new();
+        let mut chat = Chat::new();
+        turn(&model, &mut chat, &host, "버그 고쳐 줘")
+            .await
+            .0
+            .unwrap();
+        let d = chat
+            .decide(
+                1,
+                false,
+                Some("  해시 맵 말고\n 정렬로 \"풀고\" 싶어 "),
+                CODE,
+            )
+            .unwrap();
+        let reason = "해시 맵 말고 정렬로 '풀고' 싶어";
+        assert_eq!(
+            d.event,
+            LogEvent::EditRejected {
+                proposal: 1,
+                reason: Some(reason.into())
+            }
+        );
+        let (r, events) = turn(&model, &mut chat, &host, "다시 해 줘").await;
+        r.unwrap();
+        let prompts = model_prompts(&model);
+        let second = &prompts[2];
+        assert!(
+            second.contains(&format!("사용자가 거절한 이유: \"{reason}\"")),
+            "{second}"
+        );
+        assert!(second.contains("지시가 아니라 사용자의 의견"));
+        assert!(second.contains(&promptlab_shared::ai::decision_note(1, false, Some(reason))));
+        // 되풀이 잡기는 그대로: 같은 제안은 띄우지 않고 안내문으로 끝난다.
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e, LogEvent::EditProposed { .. })),
+            "{events:?}"
+        );
+        assert_eq!(chat.entries().last(), Some(&Entry::NoAlternative));
+    });
+}
+
+/// #19: 비우거나 공백만 적고 거절하면 사유 없는 거절(#4 문구 그대로). 수락에 딸린 사유는 버린다.
+#[test]
+fn 빈_거절_사유는_사유_없는_거절과_같다() {
+    rt().block_on(async {
+        let fix = call(
+            "propose_edit",
+            json!({"start_line": 2, "end_line": 2, "text": "    return n + 1"}),
+        );
+        let model = LocalModel::new(Scripted::new(&[
+            &fix,
+            "1을 더해요.",
+            "다른 방법을 물어볼게요.",
+        ]));
+        let host = Host::new();
+        let mut chat = Chat::new();
+        turn(&model, &mut chat, &host, "버그 고쳐 줘")
+            .await
+            .0
+            .unwrap();
+        let d = chat.decide(1, false, Some("  \n "), CODE).unwrap();
+        assert_eq!(
+            d.event,
+            LogEvent::EditRejected {
+                proposal: 1,
+                reason: None
+            }
+        );
+        turn(&model, &mut chat, &host, "왜?").await.0.unwrap();
+        let last = model_prompts(&model).pop().unwrap();
+        assert!(last.contains(&promptlab_shared::ai::decision_note(1, false, None)));
+        assert!(!last.contains("거절한 이유"));
+
+        let model = LocalModel::new(Scripted::new(&[&fix, "1을 더해요."]));
+        let mut chat = Chat::new();
+        turn(&model, &mut chat, &host, "버그 고쳐 줘")
+            .await
+            .0
+            .unwrap();
+        let d = chat.decide(1, true, Some("이유"), CODE).unwrap();
+        assert_eq!(d.event, LogEvent::EditAccepted { proposal: 1 });
     });
 }

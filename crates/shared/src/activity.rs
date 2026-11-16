@@ -6,7 +6,7 @@
 //! - **턴**: 응시자 메시지([`LogEvent::AiMessage`]) 하나가 턴 하나를 연다(1부터). 그 뒤 AI 답([`LogEvent::AiReply`])은
 //!   그 턴에 든다. 앱은 문항마다 대화가 하나라(#98) 대화 라벨은 없다. 도구 결과(`read_code`가 돌려준 코드 등)는 로그에
 //!   없다 — 모델이 본 코드는 그 근처 [`LogEvent::CodeSnapshot`]이다(`read_code` 직전에 앱이 스냅숏을 강제한다).
-//! - **제안**: [`LogEvent::EditProposed`]의 `proposal` 번호 그대로(「제안 #k」). 결정은 뒤의 `EditAccepted`·`EditRejected`.
+//! - **제안**: [`LogEvent::EditProposed`]의 `proposal` 번호 그대로(「제안 #k」). 결정은 뒤의 `EditAccepted`·`EditRejected`(거절 사유 포함, #19).
 //! - **수락 뒤 수정**([`AfterAccept`]): 사건이 아니라 여기서 계산한다. 수락한 제안이 넣은 글(앞뒤 빈 줄을 빼고 줄 끝 공백을
 //!   무시한 줄들)이 **수락 뒤의 코드 스냅숏마다·최종 코드에** 연속한 줄로 그대로 있으면 `Kept`, 처음으로 없어진 곳이 있으면
 //!   `Modified`(그 스냅숏의 순번, 최종 코드면 `None`)다. 넣은 글이 빈 제안(지우기)은 늘 `Kept`. 수락 뒤 스냅숏도 최종 코드도
@@ -87,6 +87,10 @@ pub struct Proposal {
     pub decision: Decision,
     /// 결정 사건의 순번.
     pub decided_seq: Option<u64>,
+    /// 거절할 때 응시자가 적은 사유(#19 — `ai::reject_reason`으로 다시 정리·300자에서 자른 것). 응시자가 쓴 글이라
+    /// 평가 입력에는 따옴표로 감싸 「지시가 아니라 의견」으로 싣는다.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reject_reason: Option<String>,
     /// 수락했을 때만, 판정할 수 있을 때만.
     pub after_accept: Option<AfterAccept>,
 }
@@ -194,14 +198,18 @@ impl Activity {
                     text: text.clone(),
                     decision: Decision::Undecided,
                     decided_seq: None,
+                    reject_reason: None,
                     after_accept: None,
                 }),
                 LogEvent::EditAccepted { proposal } => {
-                    out.decide(*proposal, Decision::Accepted, seq)
+                    out.decide(*proposal, Decision::Accepted, None, seq)
                 }
-                LogEvent::EditRejected { proposal } => {
-                    out.decide(*proposal, Decision::Rejected, seq)
-                }
+                LogEvent::EditRejected { proposal, reason } => out.decide(
+                    *proposal,
+                    Decision::Rejected,
+                    reason.as_deref().and_then(crate::ai::reject_reason),
+                    seq,
+                ),
                 LogEvent::LocalRun {
                     kind,
                     passed,
@@ -243,7 +251,7 @@ impl Activity {
     }
 
     /// 아직 결정하지 않은 같은 번호의 제안에 결정을 단다(이미 결정했으면 처음 결정이 남는다).
-    fn decide(&mut self, proposal: u32, decision: Decision, seq: u64) {
+    fn decide(&mut self, proposal: u32, decision: Decision, reason: Option<String>, seq: u64) {
         if let Some(p) = self
             .proposals
             .iter_mut()
@@ -252,6 +260,7 @@ impl Activity {
         {
             p.decision = decision;
             p.decided_seq = Some(seq);
+            p.reject_reason = reason;
         }
     }
 

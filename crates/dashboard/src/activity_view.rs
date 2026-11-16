@@ -71,6 +71,13 @@ fn body(
                             "AI {model}"
                         }
                     }
+                    if let Some(speed) = item.ai_speed {
+                        span {
+                            class: "sc-badge sc-badge--neutral",
+                            title: "앱이 잰 AI 도우미 생성 속도와 GPU 사용(응시자 PC가 신고한 값) — 느리면 AI를 덜 쓸 수 있습니다",
+                            "AI {speed.label()}"
+                        }
+                    }
                 }
             }
             match &item.final_code {

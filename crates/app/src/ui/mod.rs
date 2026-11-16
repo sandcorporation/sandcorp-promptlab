@@ -85,6 +85,7 @@ pub fn detect_model_pick() -> ModelPick {
         }),
         downloaded: promptlab_inference::downloaded_models(),
         prefs: ModelPrefs::load(&model_prefs_path()),
+        allowed: None,
     }
 }
 
@@ -132,6 +133,8 @@ pub enum Target {
         terms: Option<WebcamTerms>,
         /// 시험의 허용 언어(응시 전 점검이 이 언어 이미지를 받는다).
         languages: Vec<Language>,
+        /// 시험의 허용 AI 모델 id(#5 — 점검이 추천·고르기를 이 안으로 좁힌다).
+        models: Vec<String>,
     },
     /// 개인 연습 문제.
     Practice { problem: PublicCodingProblem },
@@ -221,12 +224,30 @@ impl Ui {
             .unwrap_or_else(|| promptlab_inference::model_path(self.pick.read().chosen().model))
     }
 
-    /// 쓸 모델 파일이 받아져 있나(크기만 — sha256은 올릴 때·문항 시작 때 잰다).
+    /// 쓸 모델 파일이 받아져 있나(크기만 — sha256은 올릴 때·문항 시작 때 잰다). 시험이면 허용 모델 안의 것(#5).
     pub fn model_ready(&self) -> bool {
+        if std::env::var_os("PROMPTLAB_MODEL_PATH").is_none() {
+            return self.pick.read().ready();
+        }
         let path = self.model_path();
         match promptlab_inference::model_for_path(&path) {
             Some(m) => std::fs::metadata(&path).is_ok_and(|md| md.len() == m.size),
             None => path.is_file(),
+        }
+    }
+
+    /// 시험의 허용 모델로 고르기를 좁힌다(`None` = 제한 없음 — 개인 연습, #5). 쓸 모델이 바뀌면 올린 모델을 내린다.
+    /// 응시 전 점검 페이지가 연다.
+    pub fn restrict_models(&self, allowed: Option<Vec<String>>) {
+        let mut pick = self.pick;
+        if pick.read().allowed == allowed {
+            return;
+        }
+        let before = pick.read().chosen().model.id;
+        pick.write().allowed = allowed;
+        if pick.read().chosen().model.id != before {
+            let mut slot = self.model;
+            slot.set(ai_pane::ModelSlot::Idle);
         }
     }
 
@@ -561,6 +582,7 @@ impl Ui {
     /// 지금 편집기의 언어·코드를 내고, 채점(또는 응시 완료)이 끝날 때까지 확인한다.
     /// 시험이면 `exam::submit`이 과정 로그에 `Submitted`(언어·코드 sha256)를 남기고 로그를 올린 뒤 낸다(409면 다시).
     pub fn submit_now(&self) {
+        let model = self.model;
         let (api, mut session, mut error, plog, mut dialog, mut busy) = (
             self.api.clone(),
             self.session,
@@ -595,7 +617,12 @@ impl Ui {
         spawn_forever(async move {
             let snapshot = session.read().clone();
             let log = plog.read().clone();
-            if let Some(event) = exam::submit(&api, &snapshot, log.as_ref()).await
+            // AI 속도·GPU(#5): 올린 모델이 잰 누계(올리지 않았으면 없음).
+            let ai_speed = match &*model.read() {
+                ai_pane::ModelSlot::Ready { model, .. } => model.ai_speed(),
+                _ => None,
+            };
+            if let Some(event) = exam::submit(&api, &snapshot, log.as_ref(), ai_speed).await
                 && let Err(e) = session.write().apply(event)
             {
                 error.set(Some(e.to_string()));

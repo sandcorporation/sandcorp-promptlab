@@ -64,6 +64,7 @@ fn pick(usable: u64, downloaded: Vec<&'static str>, model: Option<&str>) -> Mode
             model: model.map(Into::into),
             ..ModelPrefs::default()
         },
+        allowed: None,
     }
 }
 
@@ -117,6 +118,62 @@ fn ram이_모자라_자동으로_15b가_되면_추천_줄과_안내에_제한적
     );
     let notice = auto.limited_notice().unwrap();
     assert!(notice.contains("더 큰 모델을 올릴 수 없어"), "{notice}");
+}
+
+/// 허용 모델(#5): 시험이면 추천·목록·고른 것을 허용 안으로 좁히고, 허용 모델을 받아 둬야 시작이 열린다.
+#[test]
+fn 시험의_허용_모델_안에서_고르고_받아_둬야_준비된다() {
+    // 7B를 GPU에 다 올리는 PC, 1.5B만 받아 뒀고 7B를 직접 골랐다.
+    let mut exam = pick(7 * GIB + GIB / 2, vec!["1.5b"], Some("7b"));
+    assert_eq!(exam.chosen().model.id, "7b");
+    assert!(!exam.ready());
+    assert_eq!(exam.required_note(), None);
+    assert_eq!(exam.slow_warning(), None, "시험이 아니면 경고하지 않는다");
+    // 1.5B만 허용: 고른 7B는 무시하고 1.5B, 목록에도 1.5B만, 받아 뒀으니 준비됨.
+    exam.allowed = Some(vec!["1.5b".into()]);
+    assert!(!exam.by_user());
+    assert_eq!(exam.chosen().model.id, "1.5b");
+    assert_eq!(
+        exam.options().iter().map(|m| m.id).collect::<Vec<_>>(),
+        vec!["1.5b"]
+    );
+    assert!(exam.ready());
+    assert!(
+        exam.required_note()
+            .unwrap()
+            .contains("Qwen2.5-Coder 1.5B 모델만"),
+    );
+    // 7B만 허용: 받아 두지 않았으니 시작이 막힌다(받으면 열린다).
+    exam.allowed = Some(vec!["7b".into()]);
+    assert_eq!(exam.chosen().model.id, "7b");
+    assert!(exam.by_user());
+    assert!(!exam.ready());
+    exam.downloaded.push("7b");
+    assert!(exam.ready());
+    assert_eq!(exam.slow_warning(), None, "GPU에 다 올리면 느리지 않다");
+}
+
+#[test]
+fn 느린_pc는_막지_않고_경고한다() {
+    // 7B만 허용인데 GPU 없이 RAM 4GB: 7B를 그대로 고르고(막지 않음) 경고한다.
+    let mut slow = pick(0, vec!["7b"], None);
+    slow.machine = Machine {
+        gpu: None,
+        free_ram: 4 * GIB,
+    };
+    slow.allowed = Some(vec!["7b".into()]);
+    assert_eq!(slow.chosen().model.id, "7b");
+    assert!(slow.ready());
+    let warning = slow.slow_warning().unwrap();
+    assert!(
+        warning.contains("Qwen2.5-Coder 7B가 느릴 수 있습니다"),
+        "{warning}"
+    );
+    assert!(warning.contains("결과에 기록"), "{warning}");
+    // 제한이 없으면(개인 연습) 같은 PC라도 1.5B를 추천하고 경고하지 않는다.
+    slow.allowed = None;
+    assert_eq!(slow.chosen().model.id, "1.5b");
+    assert_eq!(slow.slow_warning(), None);
 }
 
 #[test]

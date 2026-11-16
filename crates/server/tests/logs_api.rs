@@ -259,6 +259,7 @@ fn session_events() -> Vec<LogEvent> {
         LogEvent::Submitted {
             language: Language::Python,
             code_sha256: code_sha256(CODE),
+            ai_speed: None,
         },
     ]
 }

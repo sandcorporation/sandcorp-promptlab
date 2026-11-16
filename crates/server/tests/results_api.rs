@@ -431,7 +431,11 @@ async fn csv는_bom으로_시작하고_수식을_막고_숨은_것을_싣지_않
     assert_eq!(lines.len(), 2, "머리 + 응시자 한 명");
     assert!(lines[0].starts_with("이메일,이름,상태,통과율 평균(%),최종 점수,AI 활용 평균"));
     assert!(lines[0].contains("문항2 소요 시간(초)"));
-    assert!(lines[0].contains("문항1 언어,문항1 AI 모델,문항1 통과율(%)"));
+    assert!(
+        lines[0].contains(
+            "문항1 언어,문항1 AI 모델,문항1 AI 속도(토큰/초),문항1 AI GPU,문항1 통과율(%)"
+        )
+    );
     for gone in ["턴", "글자 수", "기준선"] {
         assert!(!lines[0].contains(gone), "{gone} 열은 없다: {}", lines[0]);
     }
@@ -442,7 +446,7 @@ async fn csv는_bom으로_시작하고_수식을_막고_숨은_것을_싣지_않
     );
     let total = catalog::find(ITEM0).unwrap().hidden.len();
     let expected = format!(
-        "채점 완료,Python 3.12,{},{:.1},1/{total},30,",
+        "채점 완료,Python 3.12,{},,,{:.1},1/{total},30,",
         promptlab_shared::inference::LARGEST_MODEL.label,
         first_only_rate(ITEM0) * 100.0
     );
@@ -483,6 +487,12 @@ fn csv_칸은_수식_시작과_구분자를_이스케이프한다() {
             elapsed_secs: Some(5),
             score: None,
             model: Some("Qwen2.5-Coder 7B".into()),
+            ai_speed: Some(promptlab_shared::log::AiSpeed {
+                generated_tokens: 246,
+                generate_ms: 20_000,
+                gpu_layers: 21,
+                total_layers: 29,
+            }),
         }],
         score: Some(0.5),
         final_score: None,
@@ -497,6 +507,8 @@ fn csv_칸은_수식_시작과_구분자를_이스케이프한다() {
     );
     assert!(csv.contains("50.0"));
     assert!(csv.contains("C++17"));
+    // AI 속도·GPU(#5): 초당 토큰 소수 한 자리와 GPU 층.
+    assert!(csv.contains(",12.3,GPU 21/29층,"), "{csv}");
 }
 
 #[sqlx::test(migrator = "promptlab_store::MIGRATOR")]

@@ -162,7 +162,9 @@ pub fn exam_invite(
     exam_title: &str,
     link: &str,
     expires_days: i64,
+    models_note: Option<&str>,
 ) -> Mail {
+    let models = models_note.map(|n| format!("{n}\n\n")).unwrap_or_default();
     Mail {
         to: to.to_owned(),
         subject: format!("[promptlab] {org_name} — 「{exam_title}」 응시 안내"),
@@ -170,7 +172,7 @@ pub fn exam_invite(
             "{org_name}에서 promptlab 시험 「{exam_title}」에 초대했습니다.\n\n\
              1. 아래 링크를 열고 카카오로 로그인하면 시험이 배정됩니다.\n   {link}\n\
              2. promptlab 응시 앱을 열어 같은 카카오 계정으로 로그인하면 배정된 시험이 보입니다.\n\n\
-             링크는 {expires_days}일 동안 쓸 수 있고, 처음 들어온 한 사람에게만 배정됩니다. 다른 사람에게 전달하지 마세요.\n"
+             {models}링크는 {expires_days}일 동안 쓸 수 있고, 처음 들어온 한 사람에게만 배정됩니다. 다른 사람에게 전달하지 마세요.\n"
         ),
     }
 }
@@ -178,6 +180,34 @@ pub fn exam_invite(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn 허용_모델이_전부가_아니면_초대_메일에_필요한_모델을_알린다() {
+        let all = promptlab_shared::exam::all_models();
+        let mail = exam_invite(
+            "a@example.com",
+            "조직",
+            "시험",
+            "https://x/exam-invite/t",
+            7,
+            promptlab_shared::exam::required_models_note(&all).as_deref(),
+        );
+        assert!(!mail.body.contains("모델"), "{}", mail.body);
+        let only = vec!["7b".to_owned()];
+        let mail = exam_invite(
+            "a@example.com",
+            "조직",
+            "시험",
+            "https://x/exam-invite/t",
+            7,
+            promptlab_shared::exam::required_models_note(&only).as_deref(),
+        );
+        assert!(
+            mail.body.contains("Qwen2.5-Coder 7B 모델만 쓸 수 있습니다"),
+            "{}",
+            mail.body
+        );
+    }
 
     #[test]
     fn 호스트가_없으면_발송이_꺼지고_있으면_보낸이가_필요하다() {

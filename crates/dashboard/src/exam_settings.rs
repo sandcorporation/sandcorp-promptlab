@@ -7,9 +7,10 @@ use promptlab_shared::api::ExamView;
 use promptlab_shared::coding::Language;
 use promptlab_shared::evaluation::COMMON_CRITERIA;
 use promptlab_shared::exam::{
-    ExamSettings, MAX_RUBRIC_DESCRIPTION_CHARS, MAX_RUBRIC_ITEMS, MAX_RUBRIC_NAME_CHARS, Purpose,
-    RubricItem,
+    ExamSettings, MAX_RUBRIC_DESCRIPTION_CHARS, MAX_RUBRIC_ITEMS, MAX_RUBRIC_NAME_CHARS,
+    MIXED_MODELS_NOTE, Purpose, RubricItem,
 };
+use promptlab_shared::inference::MODELS;
 
 use crate::retention::RetentionPanel;
 use crate::{api, notice};
@@ -21,6 +22,8 @@ pub struct SettingsDraft {
     pub rubric: Vec<RubricItem>,
     /// 허용 언어(#96, 1개 이상).
     pub languages: Vec<Language>,
+    /// 허용 AI 모델 id(#5, 1개 이상, 후보 표 순서).
+    pub models: Vec<String>,
 }
 
 impl SettingsDraft {
@@ -29,6 +32,7 @@ impl SettingsDraft {
             weight: s.score_weight,
             rubric: s.rubric.clone(),
             languages: s.allowed_languages.clone(),
+            models: s.allowed_models.clone(),
         }
     }
 
@@ -38,6 +42,7 @@ impl SettingsDraft {
             score_weight: self.weight,
             rubric: self.rubric.clone(),
             allowed_languages: self.languages.clone(),
+            allowed_models: self.models.clone(),
         };
         settings.validate()?;
         Ok(settings)
@@ -54,6 +59,9 @@ impl SettingsDraft {
         }
         if self.languages != saved.languages {
             out.push("허용 언어");
+        }
+        if self.models != saved.models {
+            out.push("허용 AI 모델");
         }
         out
     }
@@ -75,6 +83,7 @@ pub fn GradingFields(draft: Signal<SettingsDraft>, can_edit: bool) -> Element {
     let rest = 100 - weight;
     let extra = d.rubric.len();
     let languages = d.languages.clone();
+    let models = d.models.clone();
     rsx! {
         section { class: "sc-panel", "aria-label": "허용 언어",
             div { class: "sc-panel-section",
@@ -105,6 +114,38 @@ pub fn GradingFields(draft: Signal<SettingsDraft>, can_edit: bool) -> Element {
                 }
                 if languages.is_empty() {
                     span { class: "sc-tone-danger small", role: "alert", "허용 언어를 1개 이상 고르세요." }
+                }
+            }
+        }
+        section { class: "sc-panel", "aria-label": "허용 AI 모델",
+            div { class: "sc-panel-section",
+                h2 { class: "sc-panel-title", "허용 AI 모델" }
+                p { class: "muted small",
+                    "응시 앱이 응시자 PC에 맞춰 이 중에서 AI 도우미 모델을 추천합니다. 허용 밖 모델로는 문항을 시작할 수 없습니다. 1개 이상 남겨야 합니다."
+                }
+                div { class: "lang-options",
+                    for m in MODELS {
+                        label { class: "row", key: "{m.id}",
+                            input {
+                                r#type: "checkbox",
+                                checked: models.iter().any(|id| id == m.id),
+                                disabled: !can_edit,
+                                onchange: move |e| {
+                                    let mut d = draft.write();
+                                    d.models.retain(|id| id != m.id);
+                                    if e.checked() {
+                                        d.models.push(m.id.to_owned());
+                                    }
+                                    d.models.sort_by_key(|id| MODELS.iter().position(|c| c.id == id));
+                                },
+                            }
+                            span { "{m.display_name()}" }
+                        }
+                    }
+                }
+                p { class: "muted small", "{MIXED_MODELS_NOTE}" }
+                if models.is_empty() {
+                    span { class: "sc-tone-danger small", role: "alert", "허용 AI 모델을 1개 이상 고르세요." }
                 }
             }
         }
@@ -390,6 +431,20 @@ mod tests {
             vec!["허용 언어"]
         );
         d.languages.clear();
+        assert!(d.to_settings().is_err());
+    }
+
+    #[test]
+    fn 허용_ai_모델은_하나_이상이어야_저장된다() {
+        let mut d = SettingsDraft::from_settings(&ExamSettings::default());
+        assert_eq!(d.models, vec!["7b".to_owned(), "1.5b".to_owned()]);
+        d.models = vec!["7b".into()];
+        assert_eq!(d.to_settings().unwrap().allowed_models, vec!["7b"]);
+        assert_eq!(
+            d.changed(&SettingsDraft::from_settings(&ExamSettings::default())),
+            vec!["허용 AI 모델"]
+        );
+        d.models.clear();
         assert!(d.to_settings().is_err());
     }
 

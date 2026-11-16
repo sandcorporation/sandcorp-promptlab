@@ -16,7 +16,6 @@ use promptlab_vision::Verdict;
 
 use super::{FetchState, Route, Target, Ui};
 use crate::camera::{self, capture, verdict};
-use promptlab_shared::inference::MODELS;
 
 #[component]
 pub fn CheckPage(target: Target, checking: bool) -> Element {
@@ -30,6 +29,13 @@ pub fn CheckPage(target: Target, checking: bool) -> Element {
     let camera_pending = terms
         .as_ref()
         .is_some_and(|t| t.consented_at.is_none() || !t.baseline_uploaded);
+    // 허용 AI 모델(#5): 시험이면 추천·고르기를 그 안으로 좁힌다(개인 연습은 제한 없음). 렌더에서 pick을 읽기 전에 한 번.
+    use_hook(|| {
+        ui.restrict_models(match &target {
+            Target::Exam { models, .. } => Some(models.clone()),
+            Target::Practice { .. } => None,
+        })
+    });
     // 고른 AI 모델 파일은 시험만 막는다(문항 시작이 해시를 신고한다). 받기가 끝나면 다시 그릴 때 바뀐다.
     let model_ready = !is_exam || ui.model_ready();
     let languages = match &target {
@@ -203,8 +209,14 @@ pub fn CheckPage(target: Target, checking: bool) -> Element {
                                     if let Some(line) = pick.chosen_line() {
                                         span { class: "sub", "{line}" }
                                     }
+                                    if let Some(note) = pick.required_note() {
+                                        span { class: "sub", role: "note", "{note}" }
+                                    }
                                     if let Some(notice) = pick.limited_notice() {
                                         span { class: "sub warn", role: "note", "{notice}" }
+                                    }
+                                    if let Some(warning) = pick.slow_warning() {
+                                        span { class: "sub warn", role: "note", "{warning}" }
                                     }
                                     match &fetch {
                                         FetchState::Running { progress, .. } => {
@@ -225,7 +237,7 @@ pub fn CheckPage(target: Target, checking: bool) -> Element {
                                         }
                                     },
                                     option { value: "auto", selected: picked_id == "auto", "자동(추천: {pick.recommended().model.display_name()})" }
-                                    for m in MODELS.iter() {
+                                    for m in pick.options() {
                                         option { value: "{m.id}", selected: picked_id == m.id, "{pick.option_label(m)}" }
                                     }
                                 }

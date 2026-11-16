@@ -76,7 +76,7 @@ async fn load(
         "SELECT i.id AS invite_id, i.exam_id, e.title AS exam_title, i.email, u.name,
                 i.candidate_sub, EXTRACT(EPOCH FROM i.accepted_at)::bigint AS assigned_at,
                 it.position, it.problem_id,
-                st.started_at IS NOT NULL AS started, st.model_sha256,
+                st.started_at IS NOT NULL AS started, st.model_sha256, st.ai_speed,
                 s.status, s.report, s.language, s.elapsed_secs,
                 {SCORE_COLUMNS}
            FROM exam_invites i
@@ -128,6 +128,9 @@ async fn load(
             model: row
                 .try_get::<Option<String>, _>("model_sha256")?
                 .map(|sha| promptlab_shared::inference::model_name(&sha)),
+            ai_speed: row
+                .try_get::<Option<Json<promptlab_shared::log::AiSpeed>>, _>("ai_speed")?
+                .map(|Json(s)| s),
         };
         match entries.last_mut() {
             Some(e) if e.invite_id == invite_id => e.items.push(item),

@@ -128,6 +128,7 @@ fn submitted() -> LogEvent {
     LogEvent::Submitted {
         language: Language::Python,
         code_sha256: code_sha256("def f():\n    pass\n"),
+        ai_speed: None,
     }
 }
 

@@ -299,6 +299,7 @@ pub async fn item_activity(
     let model = promptlab_store::exams::item_model(&state.pool, invite.id, position)
         .await?
         .map(|sha| promptlab_shared::inference::model_name(&sha));
+    let ai_speed = promptlab_store::exams::item_ai_speed(&state.pool, invite.id, position).await?;
     Ok(Json(ItemActivity {
         position,
         submission_id: log.submission_id.map(|id| id.to_string()),
@@ -307,5 +308,6 @@ pub async fn item_activity(
         activity,
         score,
         model,
+        ai_speed,
     }))
 }

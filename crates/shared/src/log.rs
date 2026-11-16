@@ -95,6 +95,9 @@ pub enum LogEvent {
         language: Language,
         /// 제출 코드 UTF-8 바이트의 sha256(소문자 hex, [`code_sha256`]).
         code_sha256: String,
+        /// 이 PC에서 잰 AI 도우미 속도·GPU 사용(#5). 모델을 올리지 않았으면 없다. 신고값이다(`model_sha256`과 같은 성격).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ai_speed: Option<AiSpeed>,
     },
     /// 앱 창이 포커스를 잃었다(Alt+Tab 등 — 막지 못하고 기록한다, #12).
     FocusLost,
@@ -148,6 +151,56 @@ pub enum LocalRunKind {
 
 /// 코드 스냅숏 하나의 상한(바이트) — 제출 코드 상한과 같다.
 pub const MAX_SNAPSHOT_BYTES: usize = crate::coding::MAX_CODE_BYTES;
+
+/// 응시 앱이 잰 AI 도우미 속도·GPU 사용(#5) — 제출 사건에 실려 서버가 결과·CSV·응시자 상세에 싣는다(판단은 고객사).
+///
+/// 값은 앱이 모델을 올린 뒤 제출 때까지 잰 누계다. 서명된 과정 로그에 들지만 앱이 잰 **신고값**이라 고친 앱은 속일 수 있다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct AiSpeed {
+    /// 생성한 토큰 수(누계).
+    pub generated_tokens: u64,
+    /// 생성에 든 시간(밀리초, 누계).
+    pub generate_ms: u64,
+    /// GPU에 올린 층 수 / 전체 층 수(llama.cpp `n_gpu_layers` 셈). 0이면 CPU만.
+    pub gpu_layers: u32,
+    pub total_layers: u32,
+}
+
+impl AiSpeed {
+    /// 초당 생성 토큰(생성이 없었으면 `None`).
+    pub fn tokens_per_sec(&self) -> Option<f64> {
+        (self.generated_tokens > 0 && self.generate_ms > 0)
+            .then(|| self.generated_tokens as f64 * 1000.0 / self.generate_ms as f64)
+    }
+
+    /// 「12.3」처럼 소수 한 자리(생성이 없었으면 「—」).
+    pub fn tokens_per_sec_label(&self) -> String {
+        match self.tokens_per_sec() {
+            Some(v) => format!("{v:.1}"),
+            None => "—".to_owned(),
+        }
+    }
+
+    /// GPU 사용 표시: 「GPU」(전부)·「GPU 21/29층」(일부)·「CPU」.
+    pub fn gpu_label(&self) -> String {
+        if self.gpu_layers == 0 {
+            "CPU".to_owned()
+        } else if self.gpu_layers >= self.total_layers {
+            "GPU".to_owned()
+        } else {
+            format!("GPU {}/{}층", self.gpu_layers, self.total_layers)
+        }
+    }
+
+    /// 표·CSV 한 칸: 「12.3 토큰/초 · GPU」.
+    pub fn label(&self) -> String {
+        match self.tokens_per_sec() {
+            Some(v) => format!("{v:.1} 토큰/초 · {}", self.gpu_label()),
+            None => format!("생성 없음 · {}", self.gpu_label()),
+        }
+    }
+}
 
 /// 제출 코드의 sha256(소문자 hex) — [`LogEvent::Submitted`]의 `code_sha256`.
 pub fn code_sha256(code: &str) -> String {

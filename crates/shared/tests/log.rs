@@ -37,6 +37,7 @@ fn sample(signer: &LogSigner) -> Vec<SignedEvent> {
             LogEvent::Submitted {
                 language: Language::Python,
                 code_sha256: code_sha256("def f(): pass"),
+                ai_speed: None,
             },
         ],
     )
@@ -238,6 +239,7 @@ fn 판_2_사건은_종류마다_원문_형식으로_왕복한다() {
             LogEvent::Submitted {
                 language: Language::Java,
                 code_sha256: "ab".into(),
+                ai_speed: None,
             },
             r#"{"type":"submitted","language":"java","code_sha256":"ab"}"#,
         ),

@@ -279,6 +279,12 @@ pub enum SuspicionKind {
         model_ok: bool,
         count: u32,
     },
+    /// 시험이 허용하지 않는 AI 모델(#5)로 문항 시작을 시도해 막았다(허용 목록 거부와 따로 센다).
+    ModelNotAllowed {
+        /// 신고한 모델 이름([`crate::inference::model_name`]).
+        model: String,
+        count: u32,
+    },
     /// 과정 로그 검증 신호(#9).
     Log { signal: LogSignal },
     /// 웹캠 감지(#13): 얼굴 없음·여러 명·시선 이탈. 그 순간 스냅샷 참조.
@@ -300,6 +306,7 @@ impl SuspicionKind {
             SuspicionKind::FullscreenExited { .. } => "전체화면 이탈",
             SuspicionKind::PasteBlocked { .. } => "붙여넣기 막음",
             SuspicionKind::IntegrityRejected { .. } => "모델 무결성 실패",
+            SuspicionKind::ModelNotAllowed { .. } => "허용 밖 AI 모델",
             SuspicionKind::Log { .. } => "과정 로그",
             SuspicionKind::Webcam { reason, .. } => reason.label(),
             SuspicionKind::CameraUnavailable { .. } => "웹캠 끊김",
@@ -354,6 +361,9 @@ impl SuspicionKind {
                     what.join("·")
                 )
             }
+            SuspicionKind::ModelNotAllowed { model, count } => format!(
+                "시험이 허용하지 않는 AI 모델 「{model}」로 문항 시작을 {count}번 시도해 막았다"
+            ),
             SuspicionKind::Log { signal } => signal.describe(),
         }
     }

@@ -61,8 +61,8 @@ pub async fn create_exam(pool: &PgPool, exam: &NewExam<'_>, now: i64) -> Result<
     let mut tx = pool.begin().await?;
     let id: Uuid = sqlx::query_scalar(
         "INSERT INTO exams (org_id, title, purpose, reveal_scores, created_by, created_at,
-                            score_weight, rubric, allowed_languages)
-         VALUES ($1, $2, $3, $4, $5, to_timestamp($6), $7, $8, $9) RETURNING id",
+                            score_weight, rubric, allowed_languages, allowed_models)
+         VALUES ($1, $2, $3, $4, $5, to_timestamp($6), $7, $8, $9, $10) RETURNING id",
     )
     .bind(exam.org_id)
     .bind(exam.title)
@@ -73,6 +73,7 @@ pub async fn create_exam(pool: &PgPool, exam: &NewExam<'_>, now: i64) -> Result<
     .bind(i16::from(exam.settings.score_weight))
     .bind(Json(&exam.settings.rubric))
     .bind(Json(&exam.settings.allowed_languages))
+    .bind(Json(&exam.settings.allowed_models))
     .fetch_one(&mut *tx)
     .await?;
     for (position, item) in exam.items.iter().enumerate() {
@@ -92,7 +93,7 @@ pub async fn create_exam(pool: &PgPool, exam: &NewExam<'_>, now: i64) -> Result<
 }
 
 const EXAM_COLUMNS: &str = "id, org_id, title, purpose, reveal_scores,
-    score_weight, rubric, allowed_languages,
+    score_weight, rubric, allowed_languages, allowed_models,
     EXTRACT(EPOCH FROM created_at)::bigint AS created_at";
 
 /// 시험의 채점 설정을 바꾼다. 시험이 없으면 `false`.
@@ -102,12 +103,14 @@ pub async fn set_settings(
     settings: &ExamSettings,
 ) -> Result<bool, sqlx::Error> {
     let done = sqlx::query(
-        "UPDATE exams SET score_weight = $2, rubric = $3, allowed_languages = $4 WHERE id = $1",
+        "UPDATE exams SET score_weight = $2, rubric = $3, allowed_languages = $4, allowed_models = $5
+          WHERE id = $1",
     )
     .bind(exam_id)
     .bind(i16::from(settings.score_weight))
     .bind(Json(&settings.rubric))
     .bind(Json(&settings.allowed_languages))
+    .bind(Json(&settings.allowed_models))
     .execute(pool)
     .await?;
     Ok(done.rows_affected() > 0)
@@ -117,10 +120,12 @@ fn decode_settings(row: &sqlx::postgres::PgRow) -> Result<ExamSettings, sqlx::Er
     let Json(rubric): Json<Vec<RubricItem>> = row.try_get("rubric")?;
     let Json(allowed_languages): Json<Vec<promptlab_shared::coding::Language>> =
         row.try_get("allowed_languages")?;
+    let Json(allowed_models): Json<Vec<String>> = row.try_get("allowed_models")?;
     Ok(ExamSettings {
         score_weight: u8::try_from(row.try_get::<i16, _>("score_weight")?).unwrap_or(0),
         rubric,
         allowed_languages,
+        allowed_models,
     })
 }
 
@@ -373,7 +378,7 @@ pub async fn assignments_of(
 ) -> Result<Vec<Assignment>, sqlx::Error> {
     let rows = sqlx::query(
         "SELECT i.id AS invite_id, o.name AS org_name, e.id, e.org_id, e.title, e.purpose, e.reveal_scores,
-                e.score_weight, e.rubric, e.allowed_languages,
+                e.score_weight, e.rubric, e.allowed_languages, e.allowed_models,
                 EXTRACT(EPOCH FROM e.created_at)::bigint AS created_at
            FROM exam_invites i JOIN exams e ON e.id = i.exam_id JOIN orgs o ON o.id = e.org_id
           WHERE i.candidate_sub = $1 AND ($2::uuid IS NULL OR i.id = $2)
@@ -450,6 +455,22 @@ pub async fn item_model(
     .map(Option::flatten)
 }
 
+/// 제출 사건에 실려 온 AI 속도·GPU(#5). 아직 안 냈거나 모델을 올리지 않았으면 `None`.
+pub async fn item_ai_speed(
+    pool: &PgPool,
+    invite_id: Uuid,
+    position: u32,
+) -> Result<Option<promptlab_shared::log::AiSpeed>, sqlx::Error> {
+    let speed: Option<Option<Json<promptlab_shared::log::AiSpeed>>> = sqlx::query_scalar(
+        "SELECT ai_speed FROM exam_item_starts WHERE invite_id = $1 AND position = $2",
+    )
+    .bind(invite_id)
+    .bind(to_i32(position))
+    .fetch_optional(pool)
+    .await?;
+    Ok(speed.flatten().map(|Json(s)| s))
+}
+
 /// 문항 응시를 시작한다(처음 한 번만 남고, 다시 부르면 처음 시각). 시작 시각(유닉스 초)을 준다.
 /// `model_sha256`은 앱이 신고한 모델(#131 「쓴 모델」) — 다시 시작하면 마지막 신고로 바꾼다.
 pub async fn start_item(
@@ -479,6 +500,22 @@ pub async fn start_item(
     .bind(to_i32(position))
     .fetch_one(pool)
     .await
+}
+
+/// 제출 사건에 실려 온 AI 속도·GPU(#5)를 문항 시작 줄에 남긴다.
+pub async fn set_ai_speed(
+    pool: &PgPool,
+    invite_id: Uuid,
+    position: u32,
+    speed: &promptlab_shared::log::AiSpeed,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE exam_item_starts SET ai_speed = $3 WHERE invite_id = $1 AND position = $2")
+        .bind(invite_id)
+        .bind(to_i32(position))
+        .bind(Json(speed))
+        .execute(pool)
+        .await?;
+    Ok(())
 }
 
 /// 그 제출이 시험 응시면 시험의 용도와 공개 설정.

@@ -118,6 +118,18 @@ pub struct ExamSettings {
     /// 응시자가 고를 수 있는 언어(1개 이상, 기본 4개 전부 — #96). 허용 밖 언어 제출은 서버가 `422`.
     #[serde(default = "all_languages")]
     pub allowed_languages: Vec<Language>,
+    /// 응시자가 쓸 수 있는 AI 도우미 모델(후보 표 [`crate::inference::MODELS`]의 `id`, 1개 이상, 기본 전부 — #5).
+    /// 허용 밖 모델로 문항을 시작하면 서버가 `403`(시작 시각을 남기지 않고 따로 센다). 개인 연습은 제한 없음.
+    #[serde(default = "all_models")]
+    pub allowed_models: Vec<String>,
+}
+
+/// 허용 모델 기본값 — 후보 전부(큰 것부터).
+pub fn all_models() -> Vec<String> {
+    crate::inference::MODELS
+        .iter()
+        .map(|m| m.id.to_owned())
+        .collect()
 }
 
 /// 허용 언어 기본값 — 4개 전부.
@@ -131,9 +143,63 @@ impl Default for ExamSettings {
             score_weight: DEFAULT_SCORE_WEIGHT,
             rubric: Vec::new(),
             allowed_languages: all_languages(),
+            allowed_models: all_models(),
         }
     }
 }
+
+impl ExamSettings {
+    /// 후보 전부를 허용하는가(그러면 응시자 안내·막기가 필요 없다).
+    pub fn allows_all_models(&self) -> bool {
+        allows_all_models(&self.allowed_models)
+    }
+
+    /// 문항 시작 때 신고한 모델 파일 sha256이 허용 모델인가(#5). 후보 전부를 허용하면 늘 참.
+    pub fn model_allowed(&self, model_sha256: &str) -> bool {
+        self.allows_all_models()
+            || crate::inference::model_by_sha256(model_sha256)
+                .is_some_and(|m| self.allowed_models.iter().any(|id| id == m.id))
+    }
+}
+
+/// 허용 모델 id 목록이 후보 전부를 담는가.
+pub fn allows_all_models(allowed: &[String]) -> bool {
+    crate::inference::MODELS
+        .iter()
+        .all(|m| allowed.iter().any(|id| id == m.id))
+}
+
+/// 허용 모델 이름(「Qwen2.5-Coder 7B」, 여럿이면 「·」로) — 문항 시작 `403`·초대 메일·점검 화면 안내가 쓴다.
+pub fn model_names(allowed: &[String]) -> String {
+    allowed
+        .iter()
+        .filter_map(|id| crate::inference::model_by_id(id))
+        .map(|m| m.label)
+        .collect::<Vec<_>>()
+        .join("·")
+}
+
+/// 응시자 사전 안내(초대 메일·응시 전 점검 화면): 후보 전부를 허용하면 `None`.
+pub fn required_models_note(allowed: &[String]) -> Option<String> {
+    (!allows_all_models(allowed)).then(|| {
+        format!(
+            "이 시험은 AI 도우미로 {} 모델만 쓸 수 있습니다. 응시 앱의 응시 전 점검에서 이 모델을 받아 두세요 — \
+             PC 사양이 낮으면 답이 느릴 수 있습니다.",
+            model_names(allowed)
+        )
+    })
+}
+
+/// 허용 밖 모델로 문항을 시작했을 때 응시자에게 보이는 까닭(`403`).
+pub fn model_required_message(allowed: &[String]) -> String {
+    format!(
+        "이 시험은 {} 모델이 필요합니다 — 응시 전 점검에서 AI 모델을 바꿔 주세요",
+        model_names(allowed)
+    )
+}
+
+/// 시험 설정 화면의 안내(#5 결정).
+pub const MIXED_MODELS_NOTE: &str = "모델이 섞이면 AI 활용 점수 비교가 어렵습니다 — 응시자 PC 사양에 따라 쓰는 모델이 달라질 수 있습니다.";
 
 impl ExamSettings {
     /// 범위 검사(서버 422의 근거). 사람이 읽을 이유.
@@ -149,6 +215,20 @@ impl ExamSettings {
         seen.dedup();
         if seen.len() != self.allowed_languages.len() {
             return Err("허용 언어가 겹친다".into());
+        }
+        if self.allowed_models.is_empty() {
+            return Err("허용 AI 모델은 1개 이상이다".into());
+        }
+        for id in &self.allowed_models {
+            if crate::inference::model_by_id(id).is_none() {
+                return Err(format!("모르는 AI 모델이다: {id}"));
+            }
+        }
+        let mut seen_models = self.allowed_models.clone();
+        seen_models.sort();
+        seen_models.dedup();
+        if seen_models.len() != self.allowed_models.len() {
+            return Err("허용 AI 모델이 겹친다".into());
         }
         if self.rubric.len() > MAX_RUBRIC_ITEMS {
             return Err(format!("추가 기준표 항목은 {MAX_RUBRIC_ITEMS}개까지다"));

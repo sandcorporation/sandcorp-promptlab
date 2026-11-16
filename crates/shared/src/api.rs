@@ -38,7 +38,7 @@
 //! | `GET /orgs/{id}/exams/{exam}/invites` | 시험 관리·결과 보기 | — | `[`[`ExamInviteView`]`]`(초대 현황) |
 //! | `POST /exam-invites/{token}/accept` | 로그인 | — | [`AssignmentView`](응시 배정) |
 //! | `GET /me/assignments` | 로그인 | — | `[`[`AssignmentView`]`]`(내게 배정된 시험) |
-//! | `POST /assignments/{id}/items/{n}/start` | 배정받은 사람 | [`StartItemRequest`](앱 판·모델 sha256 신고, #12) | [`ItemStarted`](문제 공개 보기 + 마감). 허용 목록에 없으면 `403` |
+//! | `POST /assignments/{id}/items/{n}/start` | 배정받은 사람 | [`StartItemRequest`](앱 판·모델 sha256 신고, #12) | [`ItemStarted`](문제 공개 보기 + 마감). 허용 목록에 없거나 시험이 허용하지 않는 AI 모델(#5 — 처음 시작하는 문항만)이면 `403` |
 //! | `POST /assignments/{id}/items/{n}/submit` | 배정받은 사람 | [`SubmitItemRequest`](언어 + 코드 + 앱의 로그 순번) | `202` [`SubmissionView`]. 과정 로그의 마지막 `Submitted` 사건(언어·코드 sha256)과 같아야 한다 — 로그가 덜 올라왔으면 `409`, 다르거나 코드가 비었거나 너무 길면 `422` |
 //! | `POST /assignments/{id}/items/{n}/log/keys` | 배정받은 사람(시작한 문항) | [`RegisterLogKeyRequest`] | [`LogHead`](서버가 아는 체인 머리) |
 //! | `POST /assignments/{id}/items/{n}/log` | 배정받은 사람(시작한 문항) | [`UploadLogRequest`] | [`LogHead`] |
@@ -326,6 +326,9 @@ pub struct AssignmentView {
     pub items: Vec<AssignmentItem>,
     /// 이 시험이 허용하는 언어(#96 — 응시자는 이 중에서 고른다).
     pub allowed_languages: Vec<Language>,
+    /// 이 시험이 허용하는 AI 모델 id(#5 — 후보 표 `inference::MODELS`의 `id`). 응시 앱 점검 화면이 추천을 이 안으로
+    /// 좁히고, 허용 모델이 받아져 있을 때만 「응시 시작」을 연다. 밖의 모델로 문항을 시작하면 서버가 `403`.
+    pub allowed_models: Vec<String>,
     /// 웹캠 동의·기준 사진 조건(#13, `GET /me/assignments`만 채운다).
     #[serde(default)]
     pub webcam: Option<crate::webcam::WebcamTerms>,
@@ -426,6 +429,9 @@ pub struct ItemActivity {
     /// 문항 시작 때 신고한 AI 도우미 모델 이름(#131, 시작했을 때).
     #[serde(default)]
     pub model: Option<String>,
+    /// 제출 사건에 실린 AI 도우미 생성 속도·GPU 사용(#5, 냈을 때 — 신고값).
+    #[serde(default)]
+    pub ai_speed: Option<crate::log::AiSpeed>,
 }
 
 /// `GET /orgs/{id}/exams/{exam}/invites/{invite}/items/{n}/log` — 응시 문항 하나의 과정 다시보기.
@@ -511,6 +517,9 @@ pub struct ResultItem {
     /// 시작했으면: 문항 시작 때 앱이 신고한 AI 도우미 모델 이름(#131 — [`crate::inference::model_name`]). 판단은 고객사.
     #[serde(default)]
     pub model: Option<String>,
+    /// 냈으면: 앱이 잰 AI 도우미 생성 속도·GPU 사용(#5 — 제출 사건의 신고값). 판단은 고객사.
+    #[serde(default)]
+    pub ai_speed: Option<crate::log::AiSpeed>,
 }
 
 /// 응시자 한 사람의 시험 결과.

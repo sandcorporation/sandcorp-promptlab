@@ -172,16 +172,30 @@ pub struct AiSpeed {
 }
 
 impl AiSpeed {
-    /// 초당 생성 토큰(생성이 없었으면 `None`).
+    /// 초당 생성 토큰(생성이 없었거나 말이 안 되는 값이면 `None` — [`crate::sanity::tokens_per_sec`]).
     pub fn tokens_per_sec(&self) -> Option<f64> {
         (self.generated_tokens > 0 && self.generate_ms > 0)
             .then(|| self.generated_tokens as f64 * 1000.0 / self.generate_ms as f64)
+            .and_then(crate::sanity::tokens_per_sec)
     }
 
-    /// 「12.3」처럼 소수 한 자리(생성이 없었으면 「—」).
+    /// 말이 되는 신고값인가(#26): 층 수 1~[`MAX_LAYERS`](crate::sanity::MAX_LAYERS)·GPU 층 ≤ 전체, 누계가 상한 안,
+    /// 생성이 있었으면 시간도 있고 속도가 범위 안. 앱은 아니면 싣지 않고, 서버는 아니면 저장하지 않는다(제출은 받는다).
+    pub fn is_plausible(&self) -> bool {
+        use crate::sanity::{MAX_GENERATE_MS, MAX_GENERATED_TOKENS, MAX_LAYERS};
+        let layers =
+            (1..=MAX_LAYERS).contains(&self.total_layers) && self.gpu_layers <= self.total_layers;
+        let totals =
+            self.generated_tokens <= MAX_GENERATED_TOKENS && self.generate_ms <= MAX_GENERATE_MS;
+        let speed = self.generated_tokens == 0 || self.tokens_per_sec().is_some();
+        layers && totals && speed
+    }
+
+    /// 「12.3」처럼 소수 한 자리(생성이 없었으면 「—」, 말이 안 되는 속도면 「측정 실패」).
     pub fn tokens_per_sec_label(&self) -> String {
         match self.tokens_per_sec() {
             Some(v) => format!("{v:.1}"),
+            None if self.generated_tokens > 0 => crate::sanity::MEASURE_FAILED.to_owned(),
             None => "—".to_owned(),
         }
     }
@@ -201,6 +215,13 @@ impl AiSpeed {
     pub fn label(&self) -> String {
         match self.tokens_per_sec() {
             Some(v) => format!("{v:.1} 토큰/초 · {}", self.gpu_label()),
+            None if self.generated_tokens > 0 => {
+                format!(
+                    "속도 {} · {}",
+                    crate::sanity::MEASURE_FAILED,
+                    self.gpu_label()
+                )
+            }
             None => format!("생성 없음 · {}", self.gpu_label()),
         }
     }

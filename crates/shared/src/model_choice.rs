@@ -15,7 +15,10 @@
 //!
 //! 받기 크기·예상 시간은 고르는 데 쓰지 않고 이유에만 싣는다(이미 받은 모델이면 0) — 한 번 받으면 끝이다.
 
-use crate::inference::{MODELS, ModelPin, RuntimeConfig, choose_runtime, kv_bytes};
+use crate::inference::{
+    MODELS, ModelPin, RuntimeConfig, choose_runtime, kv_bytes, usable_gpu_memory,
+};
+use crate::sanity;
 
 /// 이보다 큰 모델을 CPU(또는 일부 층만 GPU)로 돌리면 이유에 「답이 느릴 수 있음」을 붙인다 — 7B(4.4GB)는 CPU 몫이
 /// 있으면 초당 5토큰 안팎(#116 측정: 넘친 4060 Ti에서 0층 5.3·10층 7.9 tok/s), 1.5B(1.0GB)는 CPU로도 빠르다.
@@ -43,6 +46,59 @@ pub struct Machine {
     pub gpu: Option<GpuMemory>,
     /// 지금 여유 RAM(바이트).
     pub free_ram: u64,
+    /// 잰 값이 말이 안 돼 「모름」으로 다룬 것(#26 — [`Machine::measured`]). 이유 문구에 「측정 실패」로 적는다.
+    pub unmeasured: Unmeasured,
+}
+
+/// [`Machine`]에서 잰 값이 말이 안 돼 버린 칸(#26).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Unmeasured {
+    /// GPU는 보이는데 메모리가 범위 밖·여유 > 전체 → `gpu = None`(CPU 기준으로 고른다).
+    pub gpu: bool,
+    /// 여유 RAM이 범위 밖 → `free_ram = 0`(가장 작은 후보 쪽으로 고른다).
+    pub ram: bool,
+}
+
+impl Machine {
+    /// 잰 값으로 만든다(#26): `gpu`는 레이어를 올릴 GPU가 보일 때의 llama.cpp (여유, 전체), `os_used`는 OS가 센 GPU
+    /// 사용량, `free_ram`은 여유 RAM. 말이 안 되는 값([`crate::sanity`] 범위 밖)은 「모름」으로 다룬다 — GPU 메모리를
+    /// 모르면 GPU 없음처럼(CPU 기준), 여유 RAM을 모르면 0으로 넣어 큰 모델을 고르지 않고, 이유에 「측정 실패」를 적는다.
+    pub fn measured(gpu: Option<(u64, u64)>, os_used: Option<u64>, free_ram: Option<u64>) -> Self {
+        let mut unmeasured = Unmeasured::default();
+        let gpu = gpu.and_then(|(free, total)| {
+            let ok = sanity::gpu_memory(free, total);
+            unmeasured.gpu = ok.is_none();
+            ok
+        });
+        let free_ram = match free_ram.and_then(sanity::ram_bytes) {
+            Some(b) => b,
+            None => {
+                unmeasured.ram = true;
+                0
+            }
+        };
+        Machine {
+            gpu: gpu.map(|(free, total)| GpuMemory {
+                total,
+                usable: usable_gpu_memory(
+                    free,
+                    total,
+                    os_used.and_then(|u| sanity::gpu_used(u, total)),
+                ),
+            }),
+            free_ram,
+            unmeasured,
+        }
+    }
+}
+
+/// 여유 RAM 문구(측정 실패면 그렇게).
+fn ram_text(machine: &Machine) -> String {
+    if machine.unmeasured.ram {
+        sanity::MEASURE_FAILED.to_owned()
+    } else {
+        gb(machine.free_ram)
+    }
 }
 
 /// 모델 하나를 이 PC에서 돌리는 계획.
@@ -155,6 +211,10 @@ fn plan_among(
             gb(g.total),
             gb(g.usable)
         )),
+        None if machine.unmeasured.gpu => parts.push(format!(
+            "그래픽 메모리 {}(CPU 기준으로 고름)",
+            sanity::MEASURE_FAILED
+        )),
         None => parts.push("GPU 없음".to_owned()),
     }
     if let Some(candidates) = recommended {
@@ -162,7 +222,7 @@ fn plan_among(
             let need = ram_need(bigger, &choose_runtime(usable, bigger));
             parts.push(format!(
                 "여유 RAM {}로는 {}를 올릴 수 없음(필요 {})",
-                gb(machine.free_ram),
+                ram_text(machine),
                 bigger.label,
                 gb(need)
             ));
@@ -195,7 +255,7 @@ fn plan_among(
     if !fits(model, machine) {
         parts.push(format!(
             "여유 RAM {}로는 빠듯합니다 — 다른 앱을 닫으세요",
-            gb(machine.free_ram)
+            ram_text(machine)
         ));
     }
     parts.push(download_text(download_bytes));

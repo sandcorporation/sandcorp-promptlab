@@ -58,6 +58,7 @@ fn pick(usable: u64, downloaded: Vec<&'static str>, model: Option<&str>) -> Mode
                 usable,
             }),
             free_ram: 12 * GIB,
+            unmeasured: Default::default(),
         },
         downloaded,
         prefs: ModelPrefs {
@@ -160,6 +161,7 @@ fn 느린_pc는_막지_않고_경고한다() {
     slow.machine = Machine {
         gpu: None,
         free_ram: 4 * GIB,
+        unmeasured: Default::default(),
     };
     slow.allowed = Some(vec!["7b".into()]);
     assert_eq!(slow.chosen().model.id, "7b");

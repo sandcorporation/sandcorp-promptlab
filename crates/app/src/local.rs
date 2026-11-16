@@ -101,8 +101,12 @@ impl<M> LocalModel<M> {
     }
 
     /// 올린 뒤 지금까지 잰 AI 속도·GPU 사용(#5). 실제 모델은 올릴 때 GPU 층을 알고(생성 0), 가짜 모델은 첫 생성부터.
+    /// 말이 안 되는 누계(#26 — 0에 가까운 시간으로 나눈 속도, 잘못 읽은 층 수)는 싣지 않는다.
     pub fn ai_speed(&self) -> Option<AiSpeed> {
-        *self.speed.lock().expect("속도 잠금")
+        self.speed
+            .lock()
+            .expect("속도 잠금")
+            .filter(AiSpeed::is_plausible)
     }
 
     /// 생성 한 번의 진단 값을 누계에 더한다.

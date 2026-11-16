@@ -2,7 +2,7 @@
 
 Windows 앱과 설치 파일은 GitHub Actions `.github/workflows/windows-build.yml`에서 PR마다 빌드하고, main release workflow에서도 검증한 뒤 설치 파일 artifact를 보관한다. PowerShell 구문 검사와 MSVC 앱 빌드·Inno Setup 설치 파일 생성이 포함된다. 운영 자격을 사용하지 않고 코드 서명·운영 E2E 제출은 수행하지 않는다.
 
-`build.ps1`은 `x86_64-pc-windows-msvc`에서 `cargo build --release --locked -p promptlab-app --bins`를 실행해 앱·CLI 바이너리와 필요한 DLL을 `dist\app`에 모은다. CI는 GPU 없는 CPU 빌드로 실행한다. `build-installer.ps1`은 `dist\promptlab-app-setup-<버전>.exe`를 만든다. 설치 파일은 workflow artifact에서 받는다.
+`build.ps1`은 `x86_64-pc-windows-msvc`에서 `cargo build --release --locked -p promptlab-app --bins`를 실행해 앱·CLI 바이너리와 필요한 DLL을 `dist\app`에 모은다. CI는 GPU 없는 CPU 빌드로 실행한다. `build-installer.ps1`은 `dist\promptlab-app-setup-<버전>.exe`를 만든다. 설치 파일은 태그 `app-v<버전>`(= 워크스페이스 `Cargo.toml` 버전) push로 도는 `app-release.yml`이 GitHub Release 자산(`promptlab-app-setup-<버전>.exe` + `SHA256SUMS.txt`)으로 올린다 — 저장소가 공개라 로그인 없이 받는다.
 
 기계 스모크(`e2e/smoke.ps1`)는 수동 인수 확인용이며 Jenkins job에 연결하지 않는다. 실제 사용자 화면·웹캠·AI·대시보드 인수 절차는 [e2e-acceptance.md](e2e-acceptance.md)를 따른다. Windows 빌드는 Jenkins 노드에서 실행하지 않는다.
 

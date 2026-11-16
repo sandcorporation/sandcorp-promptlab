@@ -1,0 +1,85 @@
+# 태그 app-v<버전> push(또는 그 태그를 고른 workflow_dispatch) → Windows 설치 파일을 공개 GitHub Release 자산으로 올린다(#21).
+# 저장소가 공개라 자산은 로그인 없이 받는다. 서명은 아직 없다(sign.ps1은 인증서가 없으면 건너뜀) — SmartScreen 경고가 뜬다.
+# 서명을 켤 때: windows-build.yml의 「Build Windows app and installer」 단계에서 build-installer.ps1 전에 sign.ps1을 부르고
+#   그 단계에만 인증서 secret을 넘긴다(지금은 secret을 참조하지 않는다).
+#
+#   verify   태그의 버전 = 워크스페이스 Cargo.toml version 인지 확인(다르면 실패).
+#   windows  windows-build.yml(workflow_call) 재사용 — 설치 파일은 artifact로 넘어온다.
+#   publish  artifact를 받아 SHA256SUMS.txt를 만들고 gh release create. contents: write는 이 잡에만.
+#
+# 보안 규칙: pull_request(_target) 없음. GitHub 호스팅 실행기만. 액션은 공식 것만 SHA 고정. GITHUB_TOKEN 외 secrets 없음.
+name: app-release
+
+on:
+  push:
+    tags: ['app-v*']
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Tag version must equal workspace version
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version=$(grep -m1 '^version = "' Cargo.toml | sed 's/^version = "\(.*\)"$/\1/')
+          if [ -z "$version" ]; then echo "workspace version not found"; exit 1; fi
+          if [ "$REF_NAME" != "app-v$version" ]; then
+            echo "tag '$REF_NAME' does not match workspace version 'app-v$version'"
+            exit 1
+          fi
+
+  windows:
+    needs: verify
+    uses: ./.github/workflows/windows-build.yml
+    permissions:
+      contents: read
+
+  publish:
+    needs: [verify, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: promptlab-windows-installer-*
+          merge-multiple: true
+          path: dist
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF_NAME: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          version="${REF_NAME#app-v}"
+          cd dist
+          test -f "promptlab-app-setup-$version.exe"
+          sha256sum "promptlab-app-setup-$version.exe" > SHA256SUMS.txt
+          sum=$(cut -d' ' -f1 SHA256SUMS.txt)
+          cat > notes.md <<NOTES
+          # PromptLab 응시 앱 $version (Windows)
+
+          - 파일: \`promptlab-app-setup-$version.exe\`
+          - SHA-256: \`$sum\` (\`SHA256SUMS.txt\`와 같다)
+
+          ## 최소 사양
+          - Windows 11(64비트), 메모리(RAM) 16GB 이상
+          - Docker Desktop 설치 필요(코드 실행용). 개인 사용은 무료이고 일정 규모 이상 기업의 업무용 사용은 유료 요금제가 필요하다.
+          - AI 모델은 설치 파일에 들어 있지 않고, 앱이 처음 실행할 때 PC 사양에 맞춰 받는다.
+
+          ## 설치할 때
+          이 설치 파일은 코드 서명이 없어 Windows SmartScreen 경고가 뜬다. 「추가 정보」 → 「실행」을 누르면 설치된다.
+          받은 파일의 SHA-256이 위 값과 같은지 확인할 수 있다: \`certutil -hashfile promptlab-app-setup-$version.exe SHA256\`
+          NOTES
+          sed -i 's/^          //' notes.md
+          gh release create "$REF_NAME" "promptlab-app-setup-$version.exe" SHA256SUMS.txt \
+            --repo "$REPO" --verify-tag --title "PromptLab 응시 앱 $version" --notes-file notes.md

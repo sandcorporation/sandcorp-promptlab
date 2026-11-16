@@ -23,7 +23,7 @@ for field in retired:
         errors.append(f"Jenkinsfile still passes retired build/check field: {field}")
 
 workflow_dir = ROOT / ".github/workflows"
-for name in ("pr-check.yml", "release.yml", "image.yml", "windows-build.yml", "build-runners.yml"):
+for name in ("pr-check.yml", "release.yml", "image.yml", "windows-build.yml", "build-runners.yml", "app-release.yml"):
     if not (workflow_dir / name).is_file():
         errors.append(f"missing Actions workflow: {name}")
 
@@ -49,6 +49,11 @@ runners = (workflow_dir / "build-runners.yml").read_text(encoding="utf-8")
 for fragment in ("workflow_dispatch:", "scripts/build-runners.sh", "packages: write"):
     if fragment not in runners:
         errors.append(f"runner image workflow missing: {fragment}")
+
+app_release = (workflow_dir / "app-release.yml").read_text(encoding="utf-8")
+for fragment in ("app-v*", "windows-build.yml", "gh release create", "SHA256SUMS.txt"):
+    if fragment not in app_release:
+        errors.append(f"app release workflow missing: {fragment}")
 
 for path in workflow_dir.glob("*.yml"):
     body = path.read_text(encoding="utf-8")

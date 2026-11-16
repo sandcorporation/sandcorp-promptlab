@@ -142,7 +142,7 @@ docker compose -f compose.dev.yaml down -v
 
 ## Windows 앱 빌드·설치 파일(#6)
 
-Windows 앱·설치 파일은 GitHub Actions `.github/workflows/windows-build.yml`에서 PR·release마다 빌드·검증한다. 운영 시크릿을 쓰지 않고 CPU 빌드, unsigned installer artifact를 만든다. `e2e/smoke.ps1`은 자동 CI에 연결하지 않는다. Windows 도구·GPU 빌드 세부는 `docs/windows-host.md`, 사람의 운영 인수는 `docs/e2e-acceptance.md`.
+Windows 앱·설치 파일은 GitHub Actions `.github/workflows/windows-build.yml`에서 PR·release마다 빌드·검증한다. 운영 시크릿을 쓰지 않고 CPU 빌드, unsigned installer artifact를 만든다. 태그 `app-v<버전>`(워크스페이스 `version`과 같아야 함)을 push하면 `app-release.yml`이 설치 파일 + `SHA256SUMS.txt`를 공개 GitHub Release 자산으로 올린다. `e2e/smoke.ps1`은 자동 CI에 연결하지 않는다. Windows 도구·GPU 빌드 세부는 `docs/windows-host.md`, 사람의 운영 인수는 `docs/e2e-acceptance.md`.
 
 ## 배포
 

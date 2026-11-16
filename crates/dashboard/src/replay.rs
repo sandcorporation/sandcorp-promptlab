@@ -153,9 +153,13 @@ fn event_row(e: ReplayEvent, origin_ms: i64) -> Element {
         LogEvent::Submitted {
             language,
             code_sha256,
+            ai_speed,
         } => {
             let short: String = code_sha256.chars().take(12).collect();
-            rsx! { div { class: "muted small", "{language.display_name()} · 코드 sha256 {short}…" } }
+            let speed = ai_speed
+                .map(|s| format!(" · AI {}", s.label()))
+                .unwrap_or_default();
+            rsx! { div { class: "muted small", "{language.display_name()} · 코드 sha256 {short}…{speed}" } }
         }
         LogEvent::FocusReturned { away_ms } => {
             rsx! { div { class: "muted small", "비운 시간 {away_ms / 1000}초" } }

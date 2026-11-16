@@ -274,6 +274,7 @@ fn ExamDetail(assignment: AssignmentView, route: Signal<Route>) -> Element {
     let terms = a.webcam.clone().filter(|t| t.required);
     let assignment_id = a.id.clone();
     let languages = a.allowed_languages.clone();
+    let models = a.allowed_models.clone();
     let language_names = a
         .allowed_languages
         .iter()
@@ -295,6 +296,7 @@ fn ExamDetail(assignment: AssignmentView, route: Signal<Route>) -> Element {
                             title: title.clone(),
                             terms: terms.clone(),
                             languages: languages.clone(),
+                            models: models.clone(),
                         })),
                         if resuming { "이어서 응시" } else { "응시 준비" }
                     }
@@ -327,6 +329,9 @@ fn ExamDetail(assignment: AssignmentView, route: Signal<Route>) -> Element {
                     }
                 }
                 p { class: "muted", "허용 언어: {language_names}. 응시 전 점검에서 이 언어들의 실행 이미지를 받아 둡니다." }
+                if let Some(note) = promptlab_shared::exam::required_models_note(&a.allowed_models) {
+                    p { class: "muted", "{note}" }
+                }
             }
         }
     }

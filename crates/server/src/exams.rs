@@ -232,6 +232,7 @@ pub async fn create_invites(
                     &exam.title,
                     &link,
                     EXAM_INVITE_SECS / 86_400,
+                    exam::required_models_note(&exam.settings.allowed_models).as_deref(),
                 );
                 // 발송 실패는 초대를 막지 않는다(링크 복사로 전한다). 오류 문구에 비밀은 없지만 받는 주소는 남기지 않는다.
                 let delivery = match state.mailer.send(&message).await {
@@ -338,6 +339,7 @@ fn assignment_view(a: Assignment) -> AssignmentView {
         scores_visible: exam::candidate_sees_scores(a.exam.purpose, a.exam.reveal_scores),
         items,
         allowed_languages: a.exam.settings.allowed_languages,
+        allowed_models: a.exam.settings.allowed_models,
         webcam: None,
     }
 }
@@ -459,6 +461,26 @@ pub async fn start_item(
         );
         return Err(ApiError::new(StatusCode::FORBIDDEN, failure.message()));
     }
+    // 허용 AI 모델(#5): 처음 시작하는 문항만 본다 — 설정을 바꾸기 전에 시작한 문항은 그대로 이어 간다.
+    // 허용 목록을 통과했으면 신고가 있다(없으면 위에서 거부).
+    if let Some(r) = report.as_ref()
+        && !assignment.started.contains_key(&position)
+        && !assignment.exam.settings.model_allowed(&r.model_sha256)
+    {
+        promptlab_store::integrity::record_model_not_allowed(
+            &state.pool,
+            assignment.id,
+            position,
+            r,
+            state.clock.now(),
+        )
+        .await?;
+        tracing::warn!(invite_id = %assignment.id, position, "시험이 허용하지 않는 AI 모델 — 문항 시작 거부");
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            exam::model_required_message(&assignment.exam.settings.allowed_models),
+        ));
+    }
     let item = &assignment.exam.items[position as usize];
     let problem = problems::find_for_org(&state.pool, assignment.exam.org_id, &item.problem_id)
         .await?
@@ -541,10 +563,11 @@ pub async fn submit_item(
             LogEvent::Submitted {
                 language,
                 code_sha256,
-            } => Some((*language, code_sha256.as_str())),
+                ai_speed,
+            } => Some((*language, code_sha256.as_str(), *ai_speed)),
             _ => None,
         });
-    let Some((language, sha256)) = logged else {
+    let Some((language, sha256, ai_speed)) = logged else {
         return Err(unprocessable(
             "과정 로그에 제출 사건이 없다 — 앱에서 다시 내라",
         ));
@@ -574,6 +597,10 @@ pub async fn submit_item(
         Err(e) if submissions::is_unique_violation(&e) => return Err(conflict("이미 낸 문항이다")),
         Err(e) => return Err(e.into()),
     };
+    // AI 속도·GPU(#5): 서명된 제출 사건의 신고값을 문항 시작 줄에 남긴다(결과·CSV·응시자 상세가 읽는다).
+    if let Some(speed) = ai_speed {
+        exams::set_ai_speed(&state.pool, assignment.id, position, &speed).await?;
+    }
     tracing::info!(id = %view.id, invite_id = %assignment.id, position, "시험 문항 제출·큐에 넣음");
     Ok((
         StatusCode::ACCEPTED,

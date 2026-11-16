@@ -379,17 +379,24 @@ pub(crate) async fn build_suspicions(
         }
     }
     for r in integrity::rejections(&state.pool, invite.id).await? {
-        signals.push(Suspicion {
-            at_ms: Some(r.last_at * 1000),
-            clock: SignalClock::Server,
-            position: r.position,
-            kind: SuspicionKind::IntegrityRejected {
+        let kind = match r.kind {
+            integrity::RejectionKind::ModelNotAllowed => SuspicionKind::ModelNotAllowed {
+                model: promptlab_shared::inference::model_name(&r.model_sha256),
+                count: r.count,
+            },
+            integrity::RejectionKind::Allowlist => SuspicionKind::IntegrityRejected {
                 app_version: r.app_version,
                 model_sha256: r.model_sha256,
                 app_ok: r.app_ok,
                 model_ok: r.model_ok,
                 count: r.count,
             },
+        };
+        signals.push(Suspicion {
+            at_ms: Some(r.last_at * 1000),
+            clock: SignalClock::Server,
+            position: r.position,
+            kind,
         });
     }
     // 시간순(시각을 모르는 것은 끝에). 같은 시각이면 모은 순서(문항·순번) 그대로.

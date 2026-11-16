@@ -93,11 +93,34 @@ pub fn fits(model: &ModelPin, machine: &Machine) -> bool {
 
 /// 이 PC에 맞는 모델을 추천한다(위 규칙). `downloaded` = 캐시에 이미 있는 모델의 [`ModelPin::id`].
 pub fn recommend(machine: &Machine, downloaded: &[&str]) -> Plan {
-    let model = MODELS
+    let all: Vec<&str> = MODELS.iter().map(|m| m.id).collect();
+    recommend_within(machine, downloaded, &all)
+}
+
+/// [`recommend`]를 시험의 허용 모델(#5 — `ExamSettings.allowed_models`의 id) 안으로 좁힌다: 허용 후보 중 큰 것부터
+/// 이 PC에 올릴 수 있는 첫 것, 없으면 허용 후보 중 가장 작은 것(이유에 「다른 앱을 닫으세요」 — 막지 않는다).
+/// 허용 후보가 하나도 없으면(모르는 id뿐) 제한 없이 고른다.
+pub fn recommend_within(machine: &Machine, downloaded: &[&str], allowed: &[&str]) -> Plan {
+    let candidates: Vec<&'static ModelPin> =
+        MODELS.iter().filter(|m| allowed.contains(&m.id)).collect();
+    let candidates = if candidates.is_empty() {
+        MODELS.iter().collect()
+    } else {
+        candidates
+    };
+    let model = candidates
         .iter()
+        .copied()
         .find(|m| fits(m, machine))
-        .unwrap_or(&MODELS[MODELS.len() - 1]);
-    plan(model, machine, downloaded, true)
+        .unwrap_or(candidates[candidates.len() - 1]);
+    plan_among(model, machine, downloaded, Some(&candidates))
+}
+
+/// 이 PC에서 `model`이 느리거나 빠듯한가(#5 — 막지 않고 점검 화면이 경고한다): 큰 모델(> [`SLOW_CPU_MODEL_BYTES`])에
+/// CPU 몫이 있거나, 여유 RAM에 들어가지 않는다.
+pub fn is_slow(model: &ModelPin, machine: &Machine) -> bool {
+    let runtime = choose_runtime(machine.gpu.map(|g| g.usable), model);
+    (model.size > SLOW_CPU_MODEL_BYTES && runtime.gpu_layers.is_some()) || !fits(model, machine)
 }
 
 /// 고른 모델(추천이든 응시자가 고른 것이든)의 계획과 이유. `recommended`면 더 큰 모델을 왜 못 올리는지도 적는다.
@@ -106,6 +129,17 @@ pub fn plan(
     machine: &Machine,
     downloaded: &[&str],
     recommended: bool,
+) -> Plan {
+    let all: Vec<&'static ModelPin> = MODELS.iter().collect();
+    plan_among(model, machine, downloaded, recommended.then_some(&all))
+}
+
+/// [`plan`] — 추천이면(`Some(후보)`) 그 후보 중 더 큰 모델을 왜 못 올리는지도 적는다.
+fn plan_among(
+    model: &'static ModelPin,
+    machine: &Machine,
+    downloaded: &[&str],
+    recommended: Option<&Vec<&'static ModelPin>>,
 ) -> Plan {
     let usable = machine.gpu.map(|g| g.usable);
     let runtime = choose_runtime(usable, model);
@@ -123,8 +157,8 @@ pub fn plan(
         )),
         None => parts.push("GPU 없음".to_owned()),
     }
-    if recommended {
-        for bigger in MODELS.iter().take_while(|m| m.id != model.id) {
+    if let Some(candidates) = recommended {
+        for bigger in candidates.iter().take_while(|m| m.id != model.id) {
             let need = ram_need(bigger, &choose_runtime(usable, bigger));
             parts.push(format!(
                 "여유 RAM {}로는 {}를 올릴 수 없음(필요 {})",

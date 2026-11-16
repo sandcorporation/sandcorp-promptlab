@@ -4,17 +4,19 @@
 //! - 스트리밍(#116): [`LocalModel::stream`]이 토큰마다 지금까지의 글을 알리고(밀린 조각은 마지막 것만) [`Cancel`]로 멈춘다.
 //! - 속도 진단(#116): 실제 모델의 생성마다 [`GenStats`] 한 줄을 `<앱 데이터>/ai-perf.log`([`PERF_LOG`])에 덧붙인다
 //!   (프롬프트·재사용 토큰, 처리·생성 tok/s, n_ctx, GPU 레이어, 백엔드). 1MB를 넘으면 `.old`로 돌린다.
+//! - AI 속도 신고(#5): 생성 토큰·시간·GPU 층을 누계해([`LocalModel::ai_speed`]) 시험 제출 사건(`LogEvent::Submitted`)에 싣는다.
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 use promptlab_inference::{LlamaInference, verify_model_file};
 use promptlab_shared::ai::Prompt;
 use promptlab_shared::inference::{
     GenStats, Generation, Inference, InferenceError, SamplingParams,
 };
+use promptlab_shared::log::AiSpeed;
 
 /// 속도 진단 로그 파일 이름(앱 데이터 폴더 안).
 pub const PERF_LOG: &str = "ai-perf.log";
@@ -72,6 +74,8 @@ pub struct LocalModel<M> {
     sha256: String,
     /// 속도 진단 로그(실제 모델만 — [`PERF_LOG`]).
     perf_log: Option<PathBuf>,
+    /// 올린 뒤 잰 생성 속도·GPU 층 누계(#5 — 시험 제출 사건에 싣는다). 복제본이 함께 센다.
+    speed: Arc<Mutex<Option<AiSpeed>>>,
 }
 
 impl<M> Clone for LocalModel<M> {
@@ -80,6 +84,7 @@ impl<M> Clone for LocalModel<M> {
             model: Arc::clone(&self.model),
             sha256: self.sha256.clone(),
             perf_log: self.perf_log.clone(),
+            speed: Arc::clone(&self.speed),
         }
     }
 }
@@ -93,6 +98,26 @@ impl<M> LocalModel<M> {
     /// 안의 추론기(시험이 가짜 모델을 들여다본다).
     pub fn inner(&self) -> &M {
         &self.model
+    }
+
+    /// 올린 뒤 지금까지 잰 AI 속도·GPU 사용(#5). 실제 모델은 올릴 때 GPU 층을 알고(생성 0), 가짜 모델은 첫 생성부터.
+    pub fn ai_speed(&self) -> Option<AiSpeed> {
+        *self.speed.lock().expect("속도 잠금")
+    }
+
+    /// 생성 한 번의 진단 값을 누계에 더한다.
+    fn add_speed(&self, stats: &GenStats) {
+        let mut speed = self.speed.lock().expect("속도 잠금");
+        let s = speed.get_or_insert(AiSpeed {
+            generated_tokens: 0,
+            generate_ms: 0,
+            gpu_layers: stats.gpu_layers,
+            total_layers: stats.layers,
+        });
+        s.generated_tokens += stats.generated_tokens as u64;
+        s.generate_ms += stats.generate_ms;
+        s.gpu_layers = stats.gpu_layers;
+        s.total_layers = stats.layers;
     }
 }
 
@@ -115,6 +140,13 @@ impl LocalModel<LlamaInference> {
         })
         .await?;
         let mut model = Self::with_sha256(model, sha256);
+        let (gpu_layers, total_layers) = model.inner().gpu_layers();
+        *model.speed.lock().expect("속도 잠금") = Some(AiSpeed {
+            generated_tokens: 0,
+            generate_ms: 0,
+            gpu_layers,
+            total_layers,
+        });
         let log = crate::proclog::data_dir().join(PERF_LOG);
         append_line(&log, &format!("load {}", model.inner().load_note()));
         model.perf_log = Some(log);
@@ -133,6 +165,7 @@ impl<M: Inference + Send + Sync + 'static> LocalModel<M> {
             model: Arc::new(model),
             sha256,
             perf_log: None,
+            speed: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -189,10 +222,13 @@ impl<M: Inference + Send + Sync + 'static> LocalModel<M> {
         let result = done_rx
             .await
             .map_err(|_| InferenceError::Failed("추론 스레드가 멈췄다".into()))?;
-        if let (Ok(g), Some(path)) = (&result, &self.perf_log)
+        if let Ok(g) = &result
             && let Some(stats) = &g.stats
         {
-            append_perf_log(path, stats, g.stopped);
+            self.add_speed(stats);
+            if let Some(path) = &self.perf_log {
+                append_perf_log(path, stats, g.stopped);
+            }
         }
         result
     }

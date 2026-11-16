@@ -723,6 +723,7 @@ pub async fn logged_submit_body(
         LogEvent::Submitted {
             language: Language::Python,
             code_sha256: code_sha256(code),
+            ai_speed: None,
         },
     ];
     let log_seq = upload_events(app, base, token, events).await;

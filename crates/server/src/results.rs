@@ -154,6 +154,10 @@ fn item_cells(item: &ResultItem) -> Vec<String> {
             .map(|l| l.display_name().to_string())
             .unwrap_or_default(),
         item.model.clone().unwrap_or_default(),
+        item.ai_speed
+            .map(|s| s.tokens_per_sec_label())
+            .unwrap_or_default(),
+        item.ai_speed.map(|s| s.gpu_label()).unwrap_or_default(),
         percent(item.pass_rate),
         match (item.passed, item.total) {
             (Some(p), Some(t)) => format!("{p}/{t}"),
@@ -187,6 +191,8 @@ pub fn results_csv(rows: &[ResultRow]) -> String {
             "상태",
             "언어",
             "AI 모델",
+            "AI 속도(토큰/초)",
+            "AI GPU",
             "통과율(%)",
             "통과/전체",
             "소요 시간(초)",

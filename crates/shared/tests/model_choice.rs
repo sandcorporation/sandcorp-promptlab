@@ -5,8 +5,8 @@ use promptlab_shared::inference::{
     CONTEXT_TOKENS, LIMITED_NOTE, MODELS, RuntimeConfig, choose_runtime, model_by_id,
 };
 use promptlab_shared::model_choice::{
-    GpuMemory, Machine, SLOW_CPU_MODEL_BYTES, cpu_ram_need, download_text, fits, plan, ram_need,
-    recommend,
+    GpuMemory, Machine, SLOW_CPU_MODEL_BYTES, cpu_ram_need, download_text, fits, is_slow, plan,
+    ram_need, recommend, recommend_within,
 };
 
 const GIB: u64 = 1024 * 1024 * 1024;
@@ -193,4 +193,44 @@ fn 응시자가_고른_7b가_ram에_빠듯하면_닫으라고_한다() {
     assert!(p.reason.contains("느릴 수 있음"), "{}", p.reason);
     assert!(p.reason.contains("다른 앱을 닫으세요"), "{}", p.reason);
     assert_eq!(p.download_bytes, 0);
+}
+
+/// 허용 모델(#5): 추천을 시험이 허용한 후보 안으로 좁힌다.
+#[test]
+fn 추천은_시험이_허용한_모델_안에서_고른다() {
+    let rich = gpu(8 * GIB, 7 * GIB + GIB / 2, 12 * GIB);
+    // 7B를 올릴 수 있어도 1.5B만 허용이면 1.5B, 이유에 더 큰 7B를 못 올린다는 말이 없다.
+    let p = recommend_within(&rich, &[], &["1.5b"]);
+    assert_eq!(p.model.id, "1.5b");
+    assert!(!p.reason.contains("올릴 수 없음"), "{}", p.reason);
+    // 7B만 허용인데 CPU·RAM이 모자란 PC: 막지 않고 7B를 고르고 빠듯하다고 말한다(점검 화면은 경고만).
+    let poor = cpu(4 * GIB);
+    assert_eq!(recommend(&poor, &[]).model.id, "1.5b");
+    let p = recommend_within(&poor, &[], &["7b"]);
+    assert_eq!(p.model.id, "7b");
+    assert!(p.reason.contains("다른 앱을 닫으세요"), "{}", p.reason);
+    assert!(is_slow(p.model, &poor));
+    // 둘 다 허용 = 제한 없는 추천과 같다.
+    for m in [rich, poor, gpu(8 * GIB, 5 * GIB, 12 * GIB)] {
+        assert_eq!(
+            recommend_within(&m, &[], &["7b", "1.5b"]),
+            recommend(&m, &[])
+        );
+    }
+    // 모르는 id뿐이면 제한 없이.
+    assert_eq!(recommend_within(&poor, &[], &["3b"]).model.id, "1.5b");
+}
+
+#[test]
+fn 느린_pc는_큰_모델에_cpu_몫이_있거나_ram이_빠듯할_때다() {
+    let big = model_by_id("7b").unwrap();
+    let small = model_by_id("1.5b").unwrap();
+    // 7B GPU 전부 → 느리지 않다.
+    assert!(!is_slow(big, &gpu(8 * GIB, 7 * GIB + GIB / 2, 12 * GIB)));
+    // 7B 일부 층 GPU · CPU 전부 → 느리다(막지는 않는다).
+    assert!(is_slow(big, &gpu(8 * GIB, 5 * GIB, 12 * GIB)));
+    assert!(is_slow(big, &cpu(12 * GIB)));
+    // 1.5B는 CPU여도 RAM이 넉넉하면 느리지 않다.
+    assert!(!is_slow(small, &cpu(12 * GIB)));
+    assert!(is_slow(small, &cpu(GIB)));
 }

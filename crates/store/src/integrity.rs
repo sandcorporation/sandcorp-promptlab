@@ -28,6 +28,77 @@ pub async fn record_rejection(
     failure: IntegrityFailure,
     now: i64,
 ) -> Result<(), sqlx::Error> {
+    insert(
+        pool,
+        invite_id,
+        position,
+        report,
+        failure,
+        RejectionKind::Allowlist,
+        now,
+    )
+    .await
+}
+
+/// 시험의 허용 AI 모델(#5) 밖 모델로 문항 시작을 막은 것을 남긴다 — 허용 목록 거부와 따로 센다.
+pub async fn record_model_not_allowed(
+    pool: &PgPool,
+    invite_id: Uuid,
+    position: u32,
+    report: &ClientIntegrity,
+    now: i64,
+) -> Result<(), sqlx::Error> {
+    let failure = IntegrityFailure {
+        app_ok: true,
+        model_ok: true,
+    };
+    insert(
+        pool,
+        invite_id,
+        position,
+        Some(report),
+        failure,
+        RejectionKind::ModelNotAllowed,
+        now,
+    )
+    .await
+}
+
+/// 거부의 종류.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RejectionKind {
+    /// 허용 목록(#12)에 없는 앱 판·모델.
+    Allowlist,
+    /// 허용 목록은 통과했지만 시험이 허용하지 않는 AI 모델(#5).
+    ModelNotAllowed,
+}
+
+impl RejectionKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RejectionKind::Allowlist => "allowlist",
+            RejectionKind::ModelNotAllowed => "model_not_allowed",
+        }
+    }
+
+    fn parse(s: &str) -> Self {
+        if s == "model_not_allowed" {
+            RejectionKind::ModelNotAllowed
+        } else {
+            RejectionKind::Allowlist
+        }
+    }
+}
+
+async fn insert(
+    pool: &PgPool,
+    invite_id: Uuid,
+    position: u32,
+    report: Option<&ClientIntegrity>,
+    failure: IntegrityFailure,
+    kind: RejectionKind,
+    now: i64,
+) -> Result<(), sqlx::Error> {
     let (app_version, model_sha256) = match report {
         Some(r) => (
             clip_reported(&r.app_version),
@@ -37,10 +108,10 @@ pub async fn record_rejection(
     };
     sqlx::query(
         "INSERT INTO exam_integrity_rejections
-             (invite_id, position, app_version, model_sha256, app_ok, model_ok, count, first_at, last_at)
-         SELECT $1, $2, $3, $4, $5, $6, 1, to_timestamp($7), to_timestamp($7)
+             (invite_id, position, kind, app_version, model_sha256, app_ok, model_ok, count, first_at, last_at)
+         SELECT $1, $2, $9, $3, $4, $5, $6, 1, to_timestamp($7), to_timestamp($7)
           WHERE (SELECT count(*) FROM exam_integrity_rejections WHERE invite_id = $1 AND position = $2) < $8
-         ON CONFLICT (invite_id, position, app_version, model_sha256) DO UPDATE
+         ON CONFLICT (invite_id, position, kind, app_version, model_sha256) DO UPDATE
             SET count = exam_integrity_rejections.count + 1, last_at = to_timestamp($7)",
     )
     .bind(invite_id)
@@ -51,6 +122,7 @@ pub async fn record_rejection(
     .bind(failure.model_ok)
     .bind(now as f64)
     .bind(MAX_REJECTION_ROWS)
+    .bind(kind.as_str())
     .execute(pool)
     .await?;
     Ok(())
@@ -60,6 +132,7 @@ pub async fn record_rejection(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Rejection {
     pub position: u32,
+    pub kind: RejectionKind,
     pub app_version: String,
     pub model_sha256: String,
     pub app_ok: bool,
@@ -72,7 +145,7 @@ pub struct Rejection {
 /// 초대 하나의 거부 기록(마지막 시도 순).
 pub async fn rejections(pool: &PgPool, invite_id: Uuid) -> Result<Vec<Rejection>, sqlx::Error> {
     let rows = sqlx::query(
-        "SELECT position, app_version, model_sha256, app_ok, model_ok, count,
+        "SELECT position, kind, app_version, model_sha256, app_ok, model_ok, count,
                 extract(epoch FROM last_at)::bigint AS last_at
            FROM exam_integrity_rejections WHERE invite_id = $1 ORDER BY last_at",
     )
@@ -83,6 +156,7 @@ pub async fn rejections(pool: &PgPool, invite_id: Uuid) -> Result<Vec<Rejection>
         .map(|r| {
             Ok(Rejection {
                 position: to_u32(r.try_get("position")?),
+                kind: RejectionKind::parse(r.try_get::<&str, _>("kind")?),
                 app_version: r.try_get("app_version")?,
                 model_sha256: r.try_get("model_sha256")?,
                 app_ok: r.try_get("app_ok")?,

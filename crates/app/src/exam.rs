@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use promptlab_inference::verify_model_file;
 use promptlab_shared::integrity::ClientIntegrity;
-use promptlab_shared::log::{LogEvent, code_sha256};
+use promptlab_shared::log::{AiSpeed, LogEvent, code_sha256};
 
 use crate::client::{ApiClient, ClientError};
 use crate::proclog::{SharedLog, flush};
@@ -79,10 +79,13 @@ pub const SUBMIT_RETRIES: u32 = 3;
 /// 시험 문항은 과정 로그에 [`LogEvent::Submitted`](언어·코드 sha256)를 남긴 뒤 쌓인 로그를 먼저 다 올리고, 언어·코드와
 /// 이 문항에 쓴 사건 수를 보낸다(서버가 로그의 마지막 `Submitted`와 맞춰 본다). 서버가 `409`(로그가 덜 왔다)면 로그를
 /// 다시 올리고 [`SUBMIT_RETRIES`]번까지 다시 낸다. 다시 낼 때는 사건을 또 남기지 않는다.
+///
+/// `ai_speed`는 앱이 잰 AI 도우미 속도·GPU 사용(#5, 모델을 올리지 않았으면 `None`) — 제출 사건에 실린다.
 pub async fn submit(
     api: &ApiClient,
     session: &Session,
     log: Option<&SharedLog>,
+    ai_speed: Option<AiSpeed>,
 ) -> Option<SessionEvent> {
     let Phase::Submitting { submission } = session.phase() else {
         return None;
@@ -93,6 +96,7 @@ pub async fn submit(
                 let event = LogEvent::Submitted {
                     language: submission.language,
                     code_sha256: code_sha256(&submission.code),
+                    ai_speed,
                 };
                 if let Err(e) = log.lock().expect("과정 로그 잠금").record_now(event) {
                     return Some(SessionEvent::SubmitRejected {

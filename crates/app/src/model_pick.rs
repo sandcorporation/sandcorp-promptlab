@@ -4,13 +4,16 @@
 //! - 고른 크기가 없으면(「자동」) 추천을 쓴다. 고르면 기억하고 다음 실행에도 그것을 쓴다(사양이 바뀌어도).
 //! - 다른 크기로 바꾸면 화면이 올린 모델을 내리고 새 모델을 올린다. 옛 파일은 지우지 않는다(다시 바꾸면 바로 쓴다).
 //! - 바꾸는 곳은 응시 전 점검 페이지·설정뿐이다 — 문항을 푸는 동안(응시 화면)에는 바꿀 수 없다.
+//! - 시험의 허용 모델(#5, [`ModelPick::allowed`])이 있으면 추천·고르기 목록을 그 안으로 좁히고, 허용 밖으로 고른 크기는
+//!   무시하고 추천을 쓴다. 허용 모델이 받아져 있어야 시험의 「응시 시작」이 열린다([`ModelPick::ready`]). 느린 PC는 막지
+//!   않고 경고한다([`ModelPick::slow_warning`]).
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use promptlab_shared::inference::{MODELS, ModelPin, model_by_id};
-use promptlab_shared::model_choice::{Machine, Plan, gb, plan, recommend};
+use promptlab_shared::model_choice::{Machine, Plan, gb, is_slow, plan, recommend_within};
 use sha2::{Digest, Sha256};
 
 /// 설정 파일 이름(앱 데이터 폴더 안).
@@ -80,25 +83,70 @@ pub struct ModelPick {
     /// 캐시에 받아 둔 후보 id.
     pub downloaded: Vec<&'static str>,
     pub prefs: ModelPrefs,
+    /// 시험의 허용 모델 id(#5 — `AssignmentView.allowed_models`). `None`이면 제한 없음(개인 연습·설정).
+    pub allowed: Option<Vec<String>>,
 }
 
 impl ModelPick {
-    /// 추천 계획.
+    /// 이 모델을 쓸 수 있나(허용 모델 안인가).
+    pub fn is_allowed(&self, model: &ModelPin) -> bool {
+        self.allowed
+            .as_ref()
+            .is_none_or(|a| a.iter().any(|id| id == model.id))
+    }
+
+    /// 고르기 목록에 보일 후보(허용 모델만, 큰 것부터).
+    pub fn options(&self) -> Vec<&'static ModelPin> {
+        MODELS.iter().filter(|m| self.is_allowed(m)).collect()
+    }
+
+    /// 추천 계획(허용 모델 안에서).
     pub fn recommended(&self) -> Plan {
-        recommend(&self.machine, &self.downloaded)
+        let allowed: Vec<&str> = self.options().iter().map(|m| m.id).collect();
+        recommend_within(&self.machine, &self.downloaded, &allowed)
+    }
+
+    /// 응시자가 고른 것(허용 밖이면 없는 셈 — 추천을 쓴다).
+    fn user_choice(&self) -> Option<&'static ModelPin> {
+        self.prefs.chosen().filter(|m| self.is_allowed(m))
     }
 
     /// 쓸 모델의 계획 — 고른 것이 있으면 그것, 없으면 추천.
     pub fn chosen(&self) -> Plan {
-        match self.prefs.chosen() {
+        match self.user_choice() {
             Some(m) => plan(m, &self.machine, &self.downloaded, false),
             None => self.recommended(),
         }
     }
 
-    /// 응시자가 직접 골랐나.
+    /// 응시자가 직접 골랐나(허용 밖으로 고른 것은 세지 않는다).
     pub fn by_user(&self) -> bool {
-        self.prefs.chosen().is_some()
+        self.user_choice().is_some()
+    }
+
+    /// 쓸 모델을 받아 뒀나 — 시험의 「응시 시작」은 이것이 참일 때만 열린다(#5: 허용 모델이 받아져 있어야).
+    pub fn ready(&self) -> bool {
+        self.downloaded.contains(&self.chosen().model.id)
+    }
+
+    /// 시험이 필요한 모델 안내(허용 모델이 후보 전부가 아닐 때만, #5).
+    pub fn required_note(&self) -> Option<String> {
+        self.allowed
+            .as_deref()
+            .and_then(promptlab_shared::exam::required_models_note)
+    }
+
+    /// 시험이면(허용 모델이 있으면) 쓸 모델이 이 PC에서 느리거나 빠듯할 때의 경고(#5 — 막지 않는다).
+    pub fn slow_warning(&self) -> Option<String> {
+        self.allowed.as_ref()?;
+        let c = self.chosen();
+        is_slow(c.model, &self.machine).then(|| {
+            format!(
+                "이 PC에서는 {}가 느릴 수 있습니다 — 응시는 막지 않지만 AI 답을 기다리는 시간이 길 수 있습니다. \
+                 실제 생성 속도와 GPU 사용 여부는 결과에 기록되어 시험을 낸 곳이 봅니다.",
+                c.model.label
+            )
+        })
     }
 
     /// 받아 뒀나.

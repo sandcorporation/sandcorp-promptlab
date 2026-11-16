@@ -419,6 +419,18 @@ async fn 문항과_제한이_틀리면_422(pool: PgPool) {
             json!({"score_weight": 50, "allowed_languages": ["java", "java"]}),
         ),
         (
+            "허용 AI 모델 없음",
+            json!({"score_weight": 50, "allowed_models": []}),
+        ),
+        (
+            "모르는 AI 모델",
+            json!({"score_weight": 50, "allowed_models": ["7b", "3b"]}),
+        ),
+        (
+            "겹친 AI 모델",
+            json!({"score_weight": 50, "allowed_models": ["7b", "7b"]}),
+        ),
+        (
             "기준표 빈 이름",
             json!({"score_weight": 50,
             "rubric": [rubric(" ", "b")]}),
@@ -1008,6 +1020,7 @@ async fn 시험_제출은_과정_로그의_제출_사건과_맞아야_한다(poo
         vec![LogEvent::Submitted {
             language: Language::Python,
             code_sha256: code_sha256(CODE),
+            ai_speed: None,
         }],
     )
     .await;
@@ -1091,10 +1104,12 @@ async fn 마지막_제출_사건과_맞아야_한다(pool: PgPool) {
             LogEvent::Submitted {
                 language: Language::Python,
                 code_sha256: code_sha256("first-only"),
+                ai_speed: None,
             },
             LogEvent::Submitted {
                 language: Language::Python,
                 code_sha256: code_sha256(CODE),
+                ai_speed: None,
             },
         ],
     )
@@ -1293,6 +1308,7 @@ async fn 허용_언어_밖의_제출은_422이고_시작_응답은_허용_언어
         vec![LogEvent::Submitted {
             language: Language::Java,
             code_sha256: code_sha256(CODE),
+            ai_speed: None,
         }],
     )
     .await;
@@ -1314,6 +1330,7 @@ async fn 허용_언어_밖의_제출은_422이고_시작_응답은_허용_언어
         vec![LogEvent::Submitted {
             language: Language::Python,
             code_sha256: code_sha256(CODE),
+            ai_speed: None,
         }],
     )
     .await;
@@ -1326,4 +1343,194 @@ async fn 허용_언어_밖의_제출은_422이고_시작_응답은_허용_언어
     )
     .await;
     assert_eq!(status, StatusCode::ACCEPTED, "{body}");
+}
+
+/// 허용 AI 모델(#5): 배정에 실리고, 허용 밖 모델로 처음 시작하는 문항은 403(시작 시각 없음 · 무결성 거부와 따로 센
+/// 의심 신호). 설정을 바꾸기 전에 시작한 문항은 그대로 이어 간다. 제출 사건의 AI 속도·GPU는 결과·응시자 상세에 실린다.
+#[sqlx::test(migrator = "promptlab_store::MIGRATOR")]
+async fn 허용_밖_ai_모델은_새_문항_시작만_막고_속도는_결과에_실린다(
+    pool: PgPool,
+) {
+    use promptlab_shared::api::{ExamResults, ItemActivity, SuspicionView};
+    use promptlab_shared::coding::Language;
+    use promptlab_shared::inference::model_by_id;
+    use promptlab_shared::integrity::SuspicionKind;
+    use promptlab_shared::log::{AiSpeed, LogEvent, code_sha256};
+    let e = env(pool);
+    let (org, exam, assignment) = assigned(&e, Purpose::Recruiting, false).await;
+    // 기본 = 후보 전부, 배정에도 실린다.
+    assert_eq!(exam.settings.allowed_models, vec!["7b", "1.5b"]);
+    assert_eq!(assignment.allowed_models, vec!["7b", "1.5b"]);
+    let base = format!("/assignments/{}/items", assignment.id);
+    // 7B로 문항 0 시작.
+    let _: ItemStarted = ok(
+        &e.app,
+        "POST",
+        &format!("{base}/0/start"),
+        ERIN,
+        Some(start_body()),
+        StatusCode::OK,
+    )
+    .await;
+    // 그 뒤 1.5B만 허용으로 바꾼다.
+    let mut settings = exam.settings.clone();
+    settings.allowed_models = vec!["1.5b".into()];
+    let updated: ExamView = ok(
+        &e.app,
+        "PATCH",
+        &format!("/orgs/{}/exams/{}", org.id, exam.id),
+        BOB,
+        Some(json!({"settings": settings})),
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(updated.settings.allowed_models, vec!["1.5b"]);
+    let mine: Vec<AssignmentView> =
+        ok(&e.app, "GET", "/me/assignments", ERIN, None, StatusCode::OK).await;
+    assert_eq!(mine[0].allowed_models, vec!["1.5b"]);
+    // 이미 시작한 문항 0은 7B로 다시 불러도 그대로.
+    let _: ItemStarted = ok(
+        &e.app,
+        "POST",
+        &format!("{base}/0/start"),
+        ERIN,
+        Some(start_body()),
+        StatusCode::OK,
+    )
+    .await;
+    // 새 문항 1은 7B로 403 + 필요한 모델 이름, 시작 시각을 남기지 않는다(두 번 시도).
+    for _ in 0..2 {
+        let (status, body) = call(
+            &e.app,
+            "POST",
+            &format!("{base}/1/start"),
+            Some(&token_for(ERIN)),
+            Some(start_body()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+        assert!(
+            body["error"]
+                .as_str()
+                .unwrap()
+                .contains("Qwen2.5-Coder 1.5B 모델이 필요합니다"),
+            "{body}"
+        );
+    }
+    let mine: Vec<AssignmentView> =
+        ok(&e.app, "GET", "/me/assignments", ERIN, None, StatusCode::OK).await;
+    assert_eq!(mine[0].items[1].state, ItemState::NotStarted);
+    // 의심 신호: 허용 목록 거부가 아니라 따로 센 「허용 밖 AI 모델」 한 줄(2번).
+    let signals: SuspicionView = ok(
+        &e.app,
+        "GET",
+        &format!(
+            "/orgs/{}/exams/{}/invites/{}/signals",
+            org.id, exam.id, assignment.id
+        ),
+        CAROL,
+        None,
+        StatusCode::OK,
+    )
+    .await;
+    let kinds: Vec<_> = signals
+        .signals
+        .iter()
+        .map(|s| (s.position, s.kind.clone()))
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![(
+            1,
+            SuspicionKind::ModelNotAllowed {
+                model: "Qwen2.5-Coder 7B".into(),
+                count: 2,
+            }
+        )]
+    );
+    // 허용 모델(1.5B)이면 시작한다.
+    let _: ItemStarted = ok(
+        &e.app,
+        "POST",
+        &format!("{base}/1/start"),
+        ERIN,
+        Some(json!({
+            "app_version": promptlab_shared::integrity::ALLOWED_APP_VERSIONS[0],
+            "model_sha256": model_by_id("1.5b").unwrap().sha256,
+        })),
+        StatusCode::OK,
+    )
+    .await;
+    // 문항 0 제출: 서명된 제출 사건의 AI 속도·GPU가 결과·응시자 상세에 실린다.
+    let speed = AiSpeed {
+        generated_tokens: 300,
+        generate_ms: 60_000,
+        gpu_layers: 0,
+        total_layers: 29,
+    };
+    let item0 = format!("{base}/0");
+    let seq = upload_events(
+        &e.app,
+        &item0,
+        &token_for(ERIN),
+        vec![LogEvent::Submitted {
+            language: Language::Python,
+            code_sha256: code_sha256(CODE),
+            ai_speed: Some(speed),
+        }],
+    )
+    .await;
+    let (status, body) = call(
+        &e.app,
+        "POST",
+        &format!("{item0}/submit"),
+        Some(&token_for(ERIN)),
+        Some(json!({"language": "python", "code": CODE, "log_seq": seq})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::ACCEPTED, "{body}");
+    let results: ExamResults = ok(
+        &e.app,
+        "GET",
+        &format!("/orgs/{}/exams/{}/results", org.id, exam.id),
+        CAROL,
+        None,
+        StatusCode::OK,
+    )
+    .await;
+    let items = &results.rows[0].items;
+    assert_eq!(items[0].ai_speed, Some(speed));
+    assert_eq!(items[0].model.as_deref(), Some("Qwen2.5-Coder 7B"));
+    assert_eq!(items[1].ai_speed, None);
+    assert_eq!(items[1].model.as_deref(), Some("Qwen2.5-Coder 1.5B"));
+    let activity: ItemActivity = ok(
+        &e.app,
+        "GET",
+        &format!(
+            "/orgs/{}/exams/{}/invites/{}/items/0/activity",
+            org.id, exam.id, assignment.id
+        ),
+        CAROL,
+        None,
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(activity.ai_speed, Some(speed));
+    let (status, csv) = csv_of(&e, &org, &exam).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(csv.contains(",5.0,CPU,"), "{csv}");
+}
+
+/// 결과 CSV 본문(감독관).
+async fn csv_of(e: &Env, org: &OrgView, exam: &ExamView) -> (StatusCode, String) {
+    let (status, _, bytes) = send_raw(
+        &e.app,
+        "GET",
+        &format!("/orgs/{}/exams/{}/results.csv", org.id, exam.id),
+        &token_for(CAROL),
+        "text/plain",
+        Vec::new(),
+    )
+    .await;
+    (status, String::from_utf8_lossy(&bytes).into_owned())
 }

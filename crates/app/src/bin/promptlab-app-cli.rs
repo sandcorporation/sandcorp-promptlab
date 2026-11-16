@@ -509,6 +509,7 @@ fn model_pick() -> promptlab_app::model_pick::ModelPick {
         ),
         downloaded: promptlab_inference::downloaded_models(),
         prefs: ModelPrefs::load(&proclog::data_dir().join(MODEL_PREFS_FILE)),
+        allowed: None,
     }
 }
 
@@ -738,7 +739,7 @@ async fn run() -> Result<bool, String> {
             code,
         },
     )?;
-    let event = exam::submit(&api, &session, plog.as_ref().map(|(_, log)| log))
+    let event = exam::submit(&api, &session, plog.as_ref().map(|(_, log)| log), None)
         .await
         .ok_or("제출 상태가 아니다")?;
     apply(&mut session, event)?;

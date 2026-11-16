@@ -64,6 +64,16 @@ pub(crate) fn models(row: &ResultRow) -> String {
     }
 }
 
+/// 응시자 PC의 AI 도우미 속도·GPU(#5) — 마지막으로 낸 문항의 값(앱이 모델을 올린 뒤의 누계라 가장 많이 잰 값),
+/// 없으면 「—」.
+pub(crate) fn ai_speed(row: &ResultRow) -> String {
+    row.items
+        .iter()
+        .rev()
+        .find_map(|i| i.ai_speed)
+        .map_or_else(|| "—".into(), |s| s.label())
+}
+
 /// 응시자가 낸 언어들(문항 순서, 겹치면 한 번) → 「Python · Java」, 없으면 「—」.
 pub(crate) fn languages(row: &ResultRow) -> String {
     let mut names: Vec<&str> = Vec::new();
@@ -197,6 +207,7 @@ pub fn ResultsPanel(org_id: String, exam: ExamView) -> Element {
                                     th { scope: "col", class: "sc-num hide-sm", "AI 활용" }
                                     th { scope: "col", class: "hide-sm", "언어" }
                                     th { scope: "col", class: "hide-sm", title: "응시자 PC에 맞춰 고른 AI 도우미 모델 — 크기에 따라 도우미 성능이 다릅니다", "AI 모델" }
+                                    th { scope: "col", class: "hide-sm", title: "앱이 잰 AI 도우미 생성 속도와 GPU 사용(응시자 PC가 신고한 값)", "AI 속도" }
                                     th { scope: "col", class: "hide-sm", "삭제까지" }
                                 }
                             }
@@ -216,6 +227,7 @@ pub fn ResultsPanel(org_id: String, exam: ExamView) -> Element {
                                         let eval = mean(eval_scores(&row));
                                         let langs = languages(&row);
                                         let used_models = models(&row);
+                                        let speed = ai_speed(&row);
                                         rsx! {
                                             tr {
                                                 key: "{row.invite_id}",
@@ -237,6 +249,7 @@ pub fn ResultsPanel(org_id: String, exam: ExamView) -> Element {
                                                 td { class: "sc-num hide-sm", "{points(eval)}" }
                                                 td { class: "hide-sm", "{langs}" }
                                                 td { class: "hide-sm", "{used_models}" }
+                                                td { class: "hide-sm", "{speed}" }
                                                 td { class: "hide-sm",
                                                     if let Some(days) = row.delete_in_days {
                                                         span { class: "muted small", title: "보관 기간이 지나면 이 응시의 기록이 자동 삭제됩니다", "{days}일 뒤" }

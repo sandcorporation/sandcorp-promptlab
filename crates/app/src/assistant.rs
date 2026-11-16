@@ -10,6 +10,8 @@
 //!   알림으로 붙어 모델에게 간다. #125: 적용 뒤 코드가 적용 전보다 깨지면([`promptlab_shared::syntax::regression`] —
 //!   괄호·따옴표 짝, Python 빈 블록) 차례마다 한 번 띄우지 않고 모델에게 「범위를 함수 전체로 넓혀 다시」라고 되돌린다
 //!   (다시 제안할 왕복이 남았을 때만). 그래도 깨지면 띄우되 [`Proposal::warning`]으로 카드에 경고를 단다.
+//!   #3: 띄울 제안은 앞뒤의 안 바뀐 줄을 깎아([`promptlab_shared::ai::trim_edit`]) 「실제 바뀌는 범위」 하나로 —
+//!   라벨·diff·적용·`EditProposed`가 그 값을 쓰고, 모델이 말한 범위는 `AiReply.tool_calls`에만 남는다.
 //! - `run_examples` — 구현돼 있지만 [`promptlab_shared::ai::AI_TOOL_RUN_EXAMPLES`]가 꺼져 있어 모델에 주지 않는다.
 //!
 //! 과정 로그(시험만 — 화면의 `note`가 연습이면 버린다): 응시자 메시지 `AiMessage`(응시자가 쓴 글 그대로), 모델 답마다
@@ -42,7 +44,7 @@ use promptlab_shared::ai::{
     decision_note, enabled_tools, fabricated_result, numbered, parse_reply, plan_edit,
     proposal_bounced, proposal_shown, proposal_still_open, render_message,
     render_message_with_context, render_with_context, snap_edit, stream_view, summary_prompt,
-    system_block,
+    system_block, trim_edit,
 };
 use promptlab_shared::coding::{Language, PublicCodingProblem};
 use promptlab_shared::inference::{Inference, InferenceError, SamplingParams};
@@ -77,7 +79,7 @@ pub enum ProposalState {
 pub struct Proposal {
     /// 문항 안에서 겹치지 않는 번호(1부터).
     pub id: u32,
-    /// 바꿀 줄(모델이 준 그대로, 화면 표시용).
+    /// 바꿀 줄(실제 바뀌는 범위 — 모델이 준 범위에서 앞뒤의 안 바뀐 줄을 깎았다, #3. 화면 표시용).
     pub lines: (u32, u32),
     pub range: EditRange,
     pub text: String,
@@ -359,6 +361,12 @@ impl Chat {
                 None,
             );
         }
+        // #3: 앞뒤의 안 바뀐 줄을 깎아 「실제 바뀌는 범위」 하나로 — 라벨·diff·적용·`EditProposed`가 모두 이 값을 쓴다.
+        // 적용 뒤 코드는 깎기 전과 같아 위 넓히기·깨짐 점검 결과도 그대로다(점검은 모델이 말한 범위로, 되돌림 글도 그 범위로).
+        let (edit, planned) = match trim_edit(&code, &edit) {
+            Ok(v) => v,
+            Err(_) => (edit, planned),
+        };
         let id = self.next_id();
         self.proposals.push(Proposal {
             id,

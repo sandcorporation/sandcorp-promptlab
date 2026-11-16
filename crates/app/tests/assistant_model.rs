@@ -611,3 +611,77 @@ fn 실제_모델은_조용히_끝나거나_특수_토큰을_보이지_않는다(
         }
     });
 }
+
+/// #4: JS 「버그 고쳐 줘」 → 제안을 **거절** → 같은 요청 → 같은 제안을 다시 띄우지 않는다: 다른 제안이거나, 제안 없이 응시자에게
+/// 묻는 답(한국어)·안내문으로 끝난다. 온도 0·시드 고정이라 맥락이 충분히 달라지지 않으면 같은 제안이 되풀이된다.
+#[test]
+#[ignore = "모델 파일이 필요하다 — scripts/fetch-model.sh 뒤 --ignored 로 켠다"]
+fn 실제_모델은_거절된_제안을_같은_요청에_되풀이하지_않는다() {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap();
+    rt.block_on(async {
+        let model = LocalModel::<LlamaInference>::load(default_model_path())
+            .await
+            .unwrap();
+        let host = JsHost(
+            std::cell::RefCell::new(JS_CODE.to_owned()),
+            Language::Javascript,
+        );
+        let mut chat = Chat::new();
+        let question = "예제 [3, 3], 6에서 [0, 0]이 나와. 버그 고쳐 줘";
+        let t0 = Instant::now();
+        let mut log = |s: Step<'_>| {
+            if let Step::Event(LogEvent::AiReply {
+                text, tool_calls, ..
+            }) = s
+            {
+                eprintln!("[{:.1?}] 답 {text:?} 호출 {tool_calls:?}", t0.elapsed());
+            }
+        };
+        ask(&model, &mut chat, &host, question, &Cancel::new(), &mut log)
+            .await
+            .unwrap();
+        let first = chat.pending().expect("첫 편집 제안").clone();
+        eprintln!("제안 #{} {:?}\n{}", first.id, first.lines, first.text);
+        chat.decide(first.id, false, JS_CODE).unwrap();
+        let before = chat.entries().len();
+        ask(&model, &mut chat, &host, question, &Cancel::new(), &mut log)
+            .await
+            .unwrap();
+        let entries: Vec<&Entry> = chat.entries()[before..].iter().collect();
+        eprintln!(
+            "두 번째 차례 user 메시지 {:?}",
+            chat.messages()
+                .iter()
+                .rev()
+                .find(|m| matches!(m, promptlab_shared::ai::Message::User { .. }))
+        );
+        for e in &entries {
+            eprintln!("  {e:?}");
+        }
+        eprintln!("걸린 시간 {:.1?}", t0.elapsed());
+        match chat.pending() {
+            Some(second) => {
+                eprintln!(
+                    "두 번째 제안 #{} {:?}\n{}",
+                    second.id, second.lines, second.text
+                );
+                assert_ne!(
+                    second.after, first.after,
+                    "거절된 제안을 그대로 다시 띄웠다"
+                );
+            }
+            None => {
+                // 제안 없이 끝나면 새 한국어 답(앞 답을 그대로 되풀이하지 않은 것)이나 안내문이어야 한다.
+                let earlier: Vec<&Entry> = chat.entries()[..before].iter().collect();
+                let answered = entries.iter().any(|e| match e {
+                    Entry::Assistant(t) => has_hangul(t) && !earlier.contains(e),
+                    Entry::NoAlternative => true,
+                    _ => false,
+                });
+                assert!(answered, "제안도 새 한국어 답도 없다 {entries:?}");
+            }
+        }
+    });
+}

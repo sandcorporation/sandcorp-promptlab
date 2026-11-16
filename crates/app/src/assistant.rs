@@ -40,11 +40,11 @@ use std::time::Instant;
 
 use promptlab_shared::ai::{
     Budget, EMPTY_REPLY_NOTE, FABRICATED_RESULT_NOTE, Folded, LineEdit, MAX_TOOL_ROUNDS, Message,
-    REPEATED_READ_NOTE, StreamView, Tool, clip_result, compaction_cut, context_block,
-    decision_note, enabled_tools, fabricated_result, numbered, parse_reply, plan_edit,
-    proposal_bounced, proposal_shown, proposal_still_open, render_message,
-    render_message_with_context, render_with_context, snap_edit, stream_view, summary_prompt,
-    system_block, trim_edit,
+    REPEAT_GAVE_UP_RESULT, REPEATED_READ_NOTE, REPEATED_REPLY_NOTE, StreamView, Tool, clip_result,
+    compaction_cut, context_block, decision_note, enabled_tools, fabricated_result, numbered,
+    parse_reply, plan_edit, proposal_bounced, proposal_repeated, proposal_shown,
+    proposal_still_open, render_message, render_message_with_context, render_with_context,
+    snap_edit, stream_view, summary_prompt, system_block, trim_edit,
 };
 use promptlab_shared::coding::{Language, PublicCodingProblem};
 use promptlab_shared::inference::{Inference, InferenceError, SamplingParams};
@@ -92,6 +92,10 @@ pub struct Proposal {
     pub warning: Option<Breakage>,
 }
 
+/// [`Entry::NoAlternative`]의 화면 글(#4).
+pub const NO_ALTERNATIVE: &str =
+    "AI가 거절된 제안과 다른 방법을 찾지 못했습니다. 어떻게 바꾸고 싶은지 알려 주세요.";
+
 /// 화면에 보이는 대화 한 줄(원문 그대로 — 요약해도 지우지 않는다).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Entry {
@@ -109,6 +113,8 @@ pub enum Entry {
     Stopped,
     /// 다시 물어도 글·제안 없이 차례가 끝났다(#131 루프 2 — 조용히 끝나지 않게 화면에 남긴다).
     Empty,
+    /// 방금 거절된 제안을 되돌려 다시 물었는데도 같은 제안을 냈다(#4 — 띄우지 않고 응시자에게 바라는 바를 묻는다).
+    NoAlternative,
 }
 
 /// 답하는 중인 차례의 진행(#116 — 화면의 스트리밍·진행 표시).
@@ -180,6 +186,14 @@ pub struct Chat {
     live: Option<Live>,
     /// 이번 도구 왕복에서 깨진 제안을 되돌렸다(#125).
     bounced: bool,
+    /// 방금 거절된 제안 — 다음 차례가 시작되면 `guard`로 옮긴다(#4).
+    rejected: Option<u32>,
+    /// 이번 차례가 이 제안의 거절 바로 뒤다: 같은 제안·앞 답 되풀이를 잡는다(#4).
+    guard: Option<u32>,
+    /// 이번 차례에 되풀이를 이미 한 번 되돌렸다(#4).
+    repeat_bounced: bool,
+    /// 되돌린 뒤에도 같은 제안을 냈다 — 이번 도구 왕복 뒤 안내문으로 차례를 끝낸다(#4).
+    gave_up: bool,
 }
 
 impl Default for Chat {
@@ -205,6 +219,10 @@ impl Chat {
             params,
             live: None,
             bounced: false,
+            rejected: None,
+            guard: None,
+            repeat_bounced: false,
+            gave_up: false,
         }
     }
 
@@ -264,8 +282,29 @@ impl Chat {
         };
         p.state = state;
         let apply = accept.then(|| (p.range, p.text.clone()));
+        self.rejected = (!accept).then_some(id);
         self.notes.push(decision_note(id, accept));
         Ok(Decision { event, apply })
+    }
+
+    /// 되풀이를 되돌린 뒤에도 또 되풀이했다: 띄우지 않고 응시자에게 바라는 바를 묻는 안내문으로 차례를 끝낸다(#4).
+    /// 모델 대화에도 그 안내를 assistant 차례로 남겨 다음 차례가 이어지게 한다.
+    fn give_up(&mut self) {
+        self.entries.push(Entry::NoAlternative);
+        self.messages.push(Message::Assistant {
+            text: NO_ALTERNATIVE.to_owned(),
+            tool_calls: Vec::new(),
+        });
+    }
+
+    /// `reply`가 앞 assistant 답과 글자 그대로 같다(빈 답은 아니다).
+    fn repeats_earlier(&self, reply: &str) -> bool {
+        let reply = reply.trim();
+        !reply.is_empty()
+            && self
+                .messages
+                .iter()
+                .any(|m| matches!(m, Message::Assistant { text, .. } if text.trim() == reply))
     }
 
     fn next_id(&self) -> u32 {
@@ -273,12 +312,14 @@ impl Chat {
     }
 
     /// 도구 호출 하나를 실행한다: 모델에게 돌려줄 결과 글, 로그 사건(제안이면). `may_bounce` = 깨진 제안을 띄우지 않고
-    /// 모델에게 되돌려도 된다(다시 제안할 왕복이 남았고 이번 차례에 아직 되돌린 적이 없다).
+    /// 모델에게 되돌려도 된다(다시 제안할 왕복이 남았고 이번 차례에 아직 되돌린 적이 없다). `rounds_left` = 다시 제안할
+    /// 왕복이 남았다(거절된 제안의 되풀이를 되돌릴 수 있다, #4).
     async fn run_tool(
         &mut self,
         call: &ToolCall,
         host: &impl ToolHost,
         may_bounce: bool,
+        rounds_left: bool,
     ) -> (String, Option<LogEvent>) {
         let Some(tool) = Tool::enabled_by_name(&call.name) else {
             let names: Vec<&str> = enabled_tools().iter().map(|t| t.name()).collect();
@@ -312,7 +353,7 @@ impl Chat {
                     None,
                 )
             }
-            Tool::ProposeEdit => self.propose(call, host, may_bounce),
+            Tool::ProposeEdit => self.propose(call, host, may_bounce, rounds_left),
             Tool::RunExamples => {
                 self.entries
                     .push(Entry::Tool("공개 예제를 실행했습니다".into()));
@@ -326,6 +367,7 @@ impl Chat {
         call: &ToolCall,
         host: &impl ToolHost,
         may_bounce: bool,
+        rounds_left: bool,
     ) -> (String, Option<LogEvent>) {
         if let Some(p) = self.pending() {
             return (proposal_still_open(p.id), None);
@@ -367,6 +409,23 @@ impl Chat {
             Ok(v) => v,
             Err(_) => (edit, planned),
         };
+        // #4: 거절 바로 뒤 차례에 방금 거절된 것과 같은(깎은 범위·글이 같은) 제안은 띄우지 않는다 — 한 번 되돌려 다르게
+        // 묻고, 그래도 같으면(또는 다시 물을 왕복이 없으면) 안내문으로 차례를 끝낸다.
+        if let Some(rejected) = self.guard.and_then(|id| self.proposal(id))
+            && rejected.range == planned.range
+            && rejected.text == planned.text
+        {
+            let rejected = rejected.id;
+            if !self.repeat_bounced && rounds_left {
+                self.repeat_bounced = true;
+                self.entries.push(Entry::Tool(
+                    "AI가 거절된 제안을 다시 내서 다르게 물었습니다".into(),
+                ));
+                return (proposal_repeated(rejected), None);
+            }
+            self.gave_up = true;
+            return (REPEAT_GAVE_UP_RESULT.to_owned(), None);
+        }
         let id = self.next_id();
         self.proposals.push(Proposal {
             id,
@@ -438,6 +497,9 @@ pub async fn ask<M: Inference + Send + Sync + 'static>(
         full.push('\n');
     }
     full.push_str(text);
+    chat.guard = chat.rejected.take();
+    chat.repeat_bounced = false;
+    chat.gave_up = false;
     chat.messages.push(Message::User { text: full });
     chat.entries.push(Entry::User(text.to_owned()));
     on_step(Step::Event(LogEvent::AiMessage {
@@ -455,12 +517,17 @@ pub async fn ask<M: Inference + Send + Sync + 'static>(
     let answered = chat.entries[from..].iter().any(|e| {
         matches!(
             e,
-            Entry::Assistant(_) | Entry::Proposal(_) | Entry::Stopped | Entry::Error(_)
+            Entry::Assistant(_)
+                | Entry::Proposal(_)
+                | Entry::Stopped
+                | Entry::Error(_)
+                | Entry::NoAlternative
         )
     });
     if result.is_ok() && !answered {
         chat.entries.push(Entry::Empty);
     }
+    chat.guard = None;
     chat.live = None;
     on_step(Step::Changed(chat));
     result
@@ -560,6 +627,27 @@ async fn rounds<M: Inference + Send + Sync + 'static>(
             on_step(Step::Changed(chat));
             continue;
         }
+        // #4: 거절 바로 뒤 차례에 앞 답을 글자 그대로 되풀이한 답(실제 7B)은 띄우지 않는다 — 한 번 되돌려 다르게 묻고,
+        // 그래도 되풀이하면(또는 다시 물을 왕복이 없으면) 안내문으로 차례를 끝낸다.
+        if calls.is_empty() && !retry && chat.guard.is_some() && chat.repeats_earlier(&reply) {
+            if !chat.repeat_bounced && round + 1 < MAX_TOOL_ROUNDS {
+                chat.repeat_bounced = true;
+                chat.entries.push(Entry::Tool(
+                    "AI가 앞 답을 되풀이해 다르게 물었습니다".into(),
+                ));
+                chat.messages.push(Message::Assistant {
+                    text: reply,
+                    tool_calls: Vec::new(),
+                });
+                chat.messages.push(Message::User {
+                    text: REPEATED_REPLY_NOTE.to_owned(),
+                });
+                on_step(Step::Changed(chat));
+                continue;
+            }
+            chat.give_up();
+            return Ok(());
+        }
         if retry {
             chat.entries.push(Entry::Tool(
                 "AI가 도구 형식을 잘못 써서 다시 물었습니다".into(),
@@ -599,7 +687,14 @@ async fn rounds<M: Inference + Send + Sync + 'static>(
             if read {
                 reads.push(call.clone());
             }
-            let (result, event) = chat.run_tool(call, host, may_bounce && !chat.bounced).await;
+            let (result, event) = chat
+                .run_tool(
+                    call,
+                    host,
+                    may_bounce && !chat.bounced,
+                    round + 1 < MAX_TOOL_ROUNDS,
+                )
+                .await;
             if let Some(e) = event {
                 on_step(Step::Event(e));
             }
@@ -607,6 +702,10 @@ async fn rounds<M: Inference + Send + Sync + 'static>(
         }
         bounced |= chat.bounced;
         chat.messages.push(Message::ToolResults { results });
+        if chat.gave_up {
+            chat.give_up();
+            return Ok(());
+        }
         on_step(Step::Changed(chat));
     }
     Ok(())

@@ -1181,7 +1181,11 @@ fn assigned(a: &AssignmentView) -> Element {
         }
         section { class: "sc-panel sc-panel-section",
             ol {
-                li { "promptlab 응시 앱을 설치하고 엽니다." }
+                li {
+                    "promptlab 응시 앱을 설치하고 엽니다. 아직 없다면 "
+                    a { href: "/download", "응시 앱 내려받기" }
+                    " (Windows)."
+                }
                 li { "「내 시험 불러오기」를 누르고 같은 카카오 계정으로 로그인합니다." }
                 li { "이 시험의 문항을 하나씩 응시합니다. 문항을 시작하면 제한 시간이 흐릅니다." }
             }

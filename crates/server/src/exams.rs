@@ -233,6 +233,7 @@ pub async fn create_invites(
                     &link,
                     EXAM_INVITE_SECS / 86_400,
                     exam::required_models_note(&exam.settings.allowed_models).as_deref(),
+                    &format!("{}/download", state.auth.public_url),
                 );
                 // 발송 실패는 초대를 막지 않는다(링크 복사로 전한다). 오류 문구에 비밀은 없지만 받는 주소는 남기지 않는다.
                 let delivery = match state.mailer.send(&message).await {

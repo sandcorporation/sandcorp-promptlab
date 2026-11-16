@@ -11,6 +11,7 @@
 
 pub mod auth;
 pub mod claude;
+pub mod download;
 pub mod erasure;
 pub mod evaluations;
 pub mod exams;
@@ -70,6 +71,8 @@ pub struct AppState {
     pub reports: Option<Arc<dyn claude::ReportModel>>,
     /// sandcorp-auth 탈퇴 웹훅 비밀(#54, 여럿). 비면 `POST /auth/webhook`이 503.
     pub webhook_secrets: retention::WebhookSecrets,
+    /// 응시 앱 내려받기 주소(#22) — GitHub Release 최신 조회 + 캐시.
+    pub download: download::Download,
 }
 
 impl AppState {
@@ -260,6 +263,8 @@ pub fn router(state: AppState) -> Router {
         ));
     let routes = Router::new()
         .route("/health", get(health))
+        // 응시 앱 내려받기(#22): 인증 없음, 최신 Release 설치 파일로 302.
+        .route("/download", get(download::download))
         .route(
             "/.well-known/oauth-protected-resource/api",
             get(auth::login::protected_resource_metadata),

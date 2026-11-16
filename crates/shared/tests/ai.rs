@@ -3,7 +3,7 @@
 use promptlab_shared::ai::{
     AI_TOOL_RUN_EXAMPLES, Budget, EditError, Folded, LineEdit, Message, Tool, apply_range,
     compaction_cut, enabled_tools, hangul_lines, numbered, parse_reply, plan_edit, py_json, render,
-    summary_prompt, system_block,
+    summary_prompt, system_block, trim_edit,
 };
 use promptlab_shared::log::{EditRange, ToolCall};
 use serde_json::json;
@@ -443,4 +443,87 @@ fn 차례_표지_글자는_보이는_답에_남지_않는다() {
     let (_, calls) =
         parse_reply("<tool_call>{\"name\":\"read_code\",\"arguments\":{}}</tool_call><|im_end|>");
     assert_eq!(calls.len(), 1);
+}
+
+/// 깎기(#3): 앞뒤의 안 바뀐 줄을 떼어 실제 바뀌는 범위 하나로. 적용 뒤 코드는 깎기 전과 같다.
+fn trimmed(code: &str, start: u32, end: u32, text: &str) -> Result<(u32, u32, String), EditError> {
+    let edit = LineEdit {
+        start_line: start,
+        end_line: end,
+        text: text.into(),
+    };
+    let (t, p) = trim_edit(code, &edit)?;
+    assert_eq!(p.after, plan_edit(code, &edit).unwrap().after);
+    if t.end_line >= t.start_line {
+        assert_eq!(
+            (p.range.start_line, p.range.end_line),
+            (t.start_line, t.end_line)
+        );
+    }
+    Ok((t.start_line, t.end_line, t.text))
+}
+
+const TRIM_CODE: &str = "def f(n):\n    a = n\n    b = a\n    return b\n";
+
+#[test]
+fn 깎기_앞_줄만_같으면_시작을_미룬다() {
+    assert_eq!(
+        trimmed(TRIM_CODE, 1, 4, "def f(n):\n    return n + 1\n"),
+        Ok((2, 4, "    return n + 1".into()))
+    );
+}
+
+#[test]
+fn 깎기_뒤_줄만_같으면_끝을_당긴다() {
+    assert_eq!(
+        trimmed(TRIM_CODE, 2, 4, "    a = n * 2\n    return b\n"),
+        Ok((2, 3, "    a = n * 2".into()))
+    );
+}
+
+#[test]
+fn 깎기_앞뒤가_같으면_가운데만_남는다() {
+    assert_eq!(
+        trimmed(
+            TRIM_CODE,
+            1,
+            4,
+            "def f(n):\n    a = n\n    b = a + 1\n    return b"
+        ),
+        Ok((3, 3, "    b = a + 1".into()))
+    );
+}
+
+#[test]
+fn 깎기_전부_같으면_바뀐_것이_없다는_오류() {
+    assert_eq!(
+        trimmed(
+            TRIM_CODE,
+            1,
+            4,
+            "def f(n):\n    a = n\n    b = a\n    return b\n"
+        ),
+        Err(EditError::NoChange)
+    );
+}
+
+#[test]
+fn 깎기_하나도_안_같으면_그대로다() {
+    assert_eq!(
+        trimmed(TRIM_CODE, 2, 3, "    x = 1\n    y = 2\n    z = 3\n"),
+        Ok((2, 3, "    x = 1\n    y = 2\n    z = 3\n".into()))
+    );
+}
+
+#[test]
+fn 깎기는_양쪽에_한_줄씩_남기고_끼워_넣기는_그대로다() {
+    // 글이 범위보다 한 줄 길다(앞 두 줄 같음) — 범위를 비우면 줄 편집으로 같은 코드를 못 만들어 한 줄 남긴다.
+    assert_eq!(
+        trimmed(TRIM_CODE, 1, 2, "def f(n):\n    a = n\n    c = 0\n"),
+        Ok((2, 2, "    a = n\n    c = 0".into()))
+    );
+    assert_eq!(
+        trimmed(TRIM_CODE, 2, 1, "    c = 0\n"),
+        Ok((2, 1, "    c = 0\n".into()))
+    );
 }

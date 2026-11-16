@@ -1069,6 +1069,50 @@ pub fn snap_edit(
     })
 }
 
+/// 제안을 「실제 바뀌는 범위」 하나로 깎는다(#3). 범위의 앞·뒤 줄이 글의 앞·뒤 줄과 글자까지 같으면 둘 다에서 뗀다 —
+/// 예: 1–4줄을 바꾸는 제안인데 글의 첫 줄이 지금 1줄과 같으면 2–4줄 + 글의 나머지. 적용 뒤 코드(`after`)는 깎기 전과
+/// 같다(달라지면 깎지 않은 제안을 준다). 라벨·diff·적용·편집 기록이 모두 이 값을 쓰고, 모델이 처음 말한 범위는 도구
+/// 호출 원문(`AiReply.tool_calls`)에만 남는다.
+///
+/// 범위와 글에 한 줄씩은 남긴다 — 줄 편집에는 줄을 통째로 지우는 꼴이 없어(빈 글 = 빈 줄) 한쪽이 비면 같은 코드를 못
+/// 만든다. 끼워 넣기(`end = start - 1`)는 깎을 줄이 없어 그대로다. 아무 줄도 안 바뀌면(`after`가 지금 코드와 같다)
+/// [`plan_edit`]처럼 [`EditError::NoChange`] — 띄우지 않고 모델에게 오류로 돌려준다. 그 밖의 오류도 [`plan_edit`] 그대로.
+pub fn trim_edit(code: &str, edit: &LineEdit) -> Result<(LineEdit, PlannedEdit), EditError> {
+    let planned = plan_edit(code, edit)?;
+    let (start, end) = (edit.start_line, edit.end_line);
+    if end < start {
+        return Ok((edit.clone(), planned));
+    }
+    let lines = split_lines(code);
+    let old = &lines[start as usize - 1..end as usize];
+    let text = edit.text.replace("\r\n", "\n");
+    let text = text.strip_suffix('\n').unwrap_or(&text);
+    let new: Vec<&str> = text.split('\n').collect();
+    let mut head = 0;
+    while head + 1 < old.len() && head + 1 < new.len() && old[head] == new[head] {
+        head += 1;
+    }
+    let mut tail = 0;
+    while head + tail + 1 < old.len()
+        && head + tail + 1 < new.len()
+        && old[old.len() - 1 - tail] == new[new.len() - 1 - tail]
+    {
+        tail += 1;
+    }
+    if head == 0 && tail == 0 {
+        return Ok((edit.clone(), planned));
+    }
+    let trimmed = LineEdit {
+        start_line: start + head as u32,
+        end_line: end - tail as u32,
+        text: new[head..new.len() - tail].join("\n"),
+    };
+    match plan_edit(code, &trimmed) {
+        Ok(p) if p.after == planned.after => Ok((trimmed, p)),
+        _ => Ok((edit.clone(), planned)),
+    }
+}
+
 /// 편집기 범위(1부터, 열은 문자 단위)를 `text`로 바꾼 코드. 범위가 코드 밖이면 `None`.
 pub fn apply_range(code: &str, range: &EditRange, text: &str) -> Option<String> {
     let start = offset(code, range.start_line, range.start_column)?;

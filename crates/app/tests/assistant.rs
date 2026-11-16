@@ -294,6 +294,68 @@ fn 코드를_읽고_편집을_제안하고_수락하면_로그와_적용_범위�
 }
 
 #[test]
+fn 앞_줄이_같은_제안은_실제_바뀌는_범위로_깎여_라벨_diff_적용_기록이_모두_그_값을_쓴다() {
+    // #3: 모델이 1–4줄을 냈는데 1줄(머리)이 지금 코드와 같다 → 라벨·diff·apply·EditProposed 모두 2–4줄.
+    rt().block_on(async {
+        let args =
+            json!({"start_line": 1, "end_line": 4, "text": "def add_one(n):\n    return n + 1\n"});
+        let model = LocalModel::new(Scripted::new(&[
+            &call("propose_edit", args.clone()),
+            "고쳤어요.",
+        ]));
+        let host = Host::new();
+        let code = "def add_one(n):\n    a = n\n    b = a\n    return b\n";
+        *host.code.borrow_mut() = code.into();
+        let mut chat = Chat::new();
+        let (r, events) = turn(&model, &mut chat, &host, "고쳐 줘").await;
+        r.unwrap();
+
+        let range = EditRange {
+            start_line: 2,
+            start_column: 1,
+            end_line: 4,
+            end_column: 13,
+        };
+        // 모델이 말한 범위(1–4줄)는 도구 호출 원문에만 남는다.
+        assert_eq!(
+            events[1],
+            LogEvent::AiReply {
+                text: String::new(),
+                tool_calls: vec![promptlab_shared::log::ToolCall {
+                    name: "propose_edit".into(),
+                    arguments: args,
+                }],
+                stopped: false,
+            }
+        );
+        assert_eq!(
+            events[2],
+            LogEvent::EditProposed {
+                proposal: 1,
+                range,
+                text: "    return n + 1".into()
+            }
+        );
+        let p = chat.pending().unwrap().clone();
+        // 라벨(`lines`)·diff(`base`→`after`)·적용 범위가 같은 값.
+        assert_eq!(p.lines, (2, 4));
+        assert_eq!(p.range, range);
+        assert_eq!(p.base, code);
+        assert_eq!(p.after, "def add_one(n):\n    return n + 1\n");
+        // 모델에게 돌려준 결과도 깎은 범위로 말한다.
+        let prompts = model_prompts(&model);
+        assert!(prompts[1].contains("편집 제안 1(2–4줄)"), "{}", prompts[1]);
+        let d = chat.decide(1, true, code).unwrap();
+        assert_eq!(d.apply, Some((range, "    return n + 1".into())));
+        let (r, t) = d.apply.unwrap();
+        assert_eq!(
+            promptlab_shared::ai::apply_range(code, &r, &t).unwrap(),
+            p.after
+        );
+    });
+}
+
+#[test]
 fn 도구_결과를_지어_낸_답은_한_번_바로잡아_다시_묻는다() {
     rt().block_on(async {
         let fake = "<tool_response>\n1| def add_one(n):\n2|     return n + 1\n</tool_response>";
@@ -780,8 +842,9 @@ fn 코드를_깨는_제안은_한_번_되돌려_다시_받는다() {
             prompts[1]
         );
         assert!(prompts[1].contains("함수 머리 `def add_one(n):`"));
-        // 띄운 뒤의 결과는 짧은 한국어 설명을 시킨다.
-        assert!(prompts[2].contains("편집 제안 1(1–2줄)이 편집기에 diff로 떴습니다"));
+        // 띄운 뒤의 결과는 짧은 한국어 설명을 시킨다. 머리 줄은 같아 깎여 실제 바뀌는 2줄만 말한다(#3).
+        assert!(prompts[2].contains("편집 제안 1(2–2줄)이 편집기에 diff로 떴습니다"));
+        assert_eq!(p.lines, (2, 2));
         assert!(prompts[2].contains("한국어 한두 문장"));
         assert!(chat.entries().contains(&Entry::Tool(
             "AI 제안이 코드를 깨뜨려 다시 물었습니다".into()

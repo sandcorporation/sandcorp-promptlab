@@ -419,7 +419,7 @@ pub fn AiPane() -> Element {
                         p { class: "sub", "문제나 코드에 대해 물어보세요. AI는 문제·고른 언어·지금 코드를 보고 답하고, 코드를 바꿀 때는 편집 제안(diff)을 보냅니다 — 수락해야 편집기에 들어갑니다." }
                     }
                     for (i, entry) in chat.entries().iter().enumerate() {
-                        {render_entry(&ui, &chat, i, entry, busy)}
+                        {render_entry(&ui, i, entry, busy)}
                     }
                     if let Some(v) = live_view.as_ref().filter(|v| !v.text.is_empty()) {
                         div { class: "bubble ai live", "{v.text}" }
@@ -464,7 +464,7 @@ pub fn AiPane() -> Element {
     }
 }
 
-fn render_entry(ui: &Ui, chat: &Chat, i: usize, entry: &Entry, busy: bool) -> Element {
+fn render_entry(ui: &Ui, i: usize, entry: &Entry, busy: bool) -> Element {
     match entry {
         Entry::User(t) => rsx! { div { key: "{i}", class: "bubble me", "{t}" } },
         Entry::Assistant(t) => rsx! { div { key: "{i}", class: "bubble ai", "{t}" } },
@@ -488,32 +488,69 @@ fn render_entry(ui: &Ui, chat: &Chat, i: usize, entry: &Entry, busy: bool) -> El
             rsx! { div { key: "{i}", class: "infobar error", role: "alert", "AI 답을 만들지 못했습니다: {e}" } }
         }
         Entry::Proposal(id) => {
-            let Some(p) = chat.proposal(*id) else {
-                return rsx! {};
-            };
-            let id = *id;
-            let (u1, u2, u3) = (ui.clone(), ui.clone(), ui.clone());
-            let added = p.text.lines().count();
-            rsx! {
-                div { key: "{i}", class: "card proposal",
-                    div { class: "row-line",
-                        strong { "편집 제안 #{id}" }
-                        span { class: "sub", "{p.lines.0}–{p.lines.1}줄 → {added}줄" }
-                        match p.state {
-                            ProposalState::Pending => rsx! { span { class: "badge warn", "결정 대기" } },
-                            ProposalState::Accepted => rsx! { span { class: "badge ok", "수락함" } },
-                            ProposalState::Rejected => rsx! { span { class: "badge", "거절함" } },
-                        }
+            // 이유 칸 글은 카드마다 따로(컴포넌트 상태) — 대화가 바뀌어도 열쇠가 달라 새지 않는다.
+            let k = format!("{}#{}", ui.chat_key(), id);
+            rsx! { ProposalCard { key: "{k}", id: *id, busy } }
+        }
+    }
+}
+
+/// 편집 제안 카드. 거절 이유 칸(#28 — 편집기 덮개와 같게: 선택·300자·Enter = 거절)의 글은 카드마다 따로 둔다.
+#[component]
+fn ProposalCard(id: u32, busy: bool) -> Element {
+    let ui = use_context::<Ui>();
+    let mut reason = use_signal(String::new);
+    let key = ui.chat_key();
+    let chats = ui.chats.read();
+    let Some(chat) = chats.get(&key) else {
+        return rsx! {};
+    };
+    let Some(p) = chat.proposal(id) else {
+        return rsx! {};
+    };
+    let (u1, u2, u3, u4) = (ui.clone(), ui.clone(), ui.clone(), ui.clone());
+    let added = p.text.lines().count();
+    rsx! {
+        div { class: "card proposal",
+            div { class: "row-line",
+                strong { "편집 제안 #{id}" }
+                span { class: "sub", "{p.lines.0}–{p.lines.1}줄 → {added}줄" }
+                match p.state {
+                    ProposalState::Pending => rsx! { span { class: "badge warn", "결정 대기" } },
+                    ProposalState::Accepted => rsx! { span { class: "badge ok", "수락함" } },
+                    ProposalState::Rejected => rsx! { span { class: "badge", "거절함" } },
+                }
+            }
+            if let Some(w) = p.warning {
+                div { class: "infobar warn", role: "status", "{w.warning()}" }
+            }
+            if p.state == ProposalState::Pending {
+                div { class: "row-line",
+                    button { onclick: move |_| u1.show_diff(id), "diff 보기" }
+                    button { class: "accent", disabled: busy, onclick: move |_| u2.decide(id, true, None), "수락" }
+                    input {
+                        class: "reject-reason",
+                        r#type: "text",
+                        maxlength: "300",
+                        placeholder: "거절 이유(선택) — 예: 정렬로 풀고 싶어",
+                        aria_label: "거절 이유(선택, 300자까지)",
+                        value: "{reason}",
+                        oninput: move |e| reason.set(e.value()),
+                        onkeydown: move |e| {
+                            if e.key() == Key::Enter && !e.modifiers().contains(Modifiers::SHIFT) {
+                                e.prevent_default();
+                                let r = reason();
+                                u4.decide(id, false, Some(r.trim()).filter(|r| !r.is_empty()));
+                            }
+                        },
                     }
-                    if let Some(w) = p.warning {
-                        div { class: "infobar warn", role: "status", "{w.warning()}" }
-                    }
-                    if p.state == ProposalState::Pending {
-                        div { class: "row-line",
-                            button { onclick: move |_| u1.show_diff(id), "diff 보기" }
-                            button { class: "accent", disabled: busy, onclick: move |_| u2.decide(id, true, None), "수락" }
-                            button { disabled: busy, onclick: move |_| u3.decide(id, false, None), "거절" }
-                        }
+                    button {
+                        disabled: busy,
+                        onclick: move |_| {
+                            let r = reason();
+                            u3.decide(id, false, Some(r.trim()).filter(|r| !r.is_empty()));
+                        },
+                        "거절"
                     }
                 }
             }

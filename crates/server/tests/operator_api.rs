@@ -928,7 +928,11 @@ async fn 허용_목록_변경이_문항_시작에_반영되고_이력이_남는�
     );
     assert_eq!(
         view.effective.app_versions,
-        vec![current.to_owned(), "9.9.9".to_owned()]
+        ALLOWED_APP_VERSIONS
+            .iter()
+            .map(|v| (*v).to_owned())
+            .chain(["9.9.9".to_owned()])
+            .collect::<Vec<_>>()
     );
 
     // 이력: 새것부터, 누가·무엇을·왜.

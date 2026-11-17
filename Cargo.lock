@@ -4922,7 +4922,7 @@ dependencies = [
 
 [[package]]
 name = "promptlab-app"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -4942,7 +4942,7 @@ dependencies = [
 
 [[package]]
 name = "promptlab-dashboard"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "dioxus",
  "gloo-net",
@@ -4956,7 +4956,7 @@ dependencies = [
 
 [[package]]
 name = "promptlab-docker-proxy"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bytes",
  "http-body-util",
@@ -4974,7 +4974,7 @@ dependencies = [
 
 [[package]]
 name = "promptlab-inference"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "llama-cpp-2",
  "llama-cpp-sys-2",
@@ -4985,7 +4985,7 @@ dependencies = [
 
 [[package]]
 name = "promptlab-judge"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "axum",
  "promptlab-runner",
@@ -5001,7 +5001,7 @@ dependencies = [
 
 [[package]]
 name = "promptlab-observability"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "regex",
  "sentry",
@@ -5021,7 +5021,7 @@ dependencies = [
 
 [[package]]
 name = "promptlab-server"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -5054,7 +5054,7 @@ dependencies = [
 
 [[package]]
 name = "promptlab-shared"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
@@ -5067,7 +5067,7 @@ dependencies = [
 
 [[package]]
 name = "promptlab-store"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "promptlab-shared",
  "serde_json",
@@ -5077,7 +5077,7 @@ dependencies = [
 
 [[package]]
 name = "promptlab-vision"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "image",
  "sha2",
@@ -5087,7 +5087,7 @@ dependencies = [
 
 [[package]]
 name = "promptlab-worker"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "promptlab-judge",
  "promptlab-observability",

@@ -67,10 +67,11 @@ fn 붙여넣기_막음_신호는_글자_수를_말한다() {
 #[test]
 fn 운영자_변경은_상수에_더하고_빼며_되돌리면_상수_그대로다() {
     let current = ALLOWED_APP_VERSIONS[0].to_owned();
-    let list = Allowlist::with_overrides(&[
-        (AllowKind::AppVersion, "9.9.9".into(), AllowAction::Allow),
-        (AllowKind::AppVersion, current.clone(), AllowAction::Block),
-    ]);
+    let mut changes = vec![(AllowKind::AppVersion, "9.9.9".into(), AllowAction::Allow)];
+    for v in ALLOWED_APP_VERSIONS {
+        changes.push((AllowKind::AppVersion, (*v).to_owned(), AllowAction::Block));
+    }
+    let list = Allowlist::with_overrides(&changes);
     assert_eq!(list.app_versions, vec!["9.9.9".to_owned()]);
     let all: Vec<_> = MODELS.iter().map(|m| m.sha256.to_owned()).collect();
     assert_eq!(list.model_sha256, all);

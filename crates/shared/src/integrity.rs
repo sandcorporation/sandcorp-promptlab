@@ -23,7 +23,7 @@ use crate::inference::MODELS;
 use crate::log::LogSignal;
 
 /// 서버가 받는 앱 판. 워크스페이스 판(`Cargo.toml`)을 올리면 여기에도 더한다(시험이 건다). 낡은 판을 막으려면 뺀다.
-pub const ALLOWED_APP_VERSIONS: &[&str] = &["0.1.1"];
+pub const ALLOWED_APP_VERSIONS: &[&str] = &["0.1.1", "0.1.2"];
 
 /// 서버가 받는 모델 파일 sha256 — 후보 표([`MODELS`])의 sha256 전부(큰 것부터).
 pub const ALLOWED_MODEL_SHA256: &[&str] = &{
